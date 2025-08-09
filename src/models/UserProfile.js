@@ -13,8 +13,9 @@ const userProfileSchema = new mongoose.Schema(
       default: null,
     },
     address: {
-      type: mongoose.Schema.Types.Mixed, // JSONB equivalent
+      type: String,
       default: null,
+      trim: true,
     },
     roleSpecificData: {
       type: mongoose.Schema.Types.Mixed, // JSONB equivalent

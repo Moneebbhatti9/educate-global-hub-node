@@ -16,6 +16,8 @@ const { notFoundHandler } = require("./middleware/notFoundHandler");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/user");
 const uploadRoutes = require("./routes/upload");
+const teacherProfileRoutes = require("./routes/teacherProfile");
+const schoolProfileRoutes = require("./routes/schoolProfile");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -96,6 +98,8 @@ const apiVersion = process.env.API_VERSION || "v1";
 app.use(`/api/${apiVersion}/auth`, authRoutes);
 app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
+app.use(`/api/${apiVersion}/teacher-profiles`, teacherProfileRoutes);
+app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

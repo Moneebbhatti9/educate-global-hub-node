@@ -4,39 +4,48 @@ module.exports = {
     es2021: true,
     jest: true,
   },
-  extends: ["airbnb-base"],
+  extends: [
+    "airbnb-base",
+    "plugin:prettier/recommended", // Integrates Prettier with ESLint
+  ],
   parserOptions: {
     ecmaVersion: "latest",
     sourceType: "module",
   },
   rules: {
-    "no-console": "off", // Allow console.log for server logging
-    "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-    "no-underscore-dangle": "off",
-    camelcase: "off",
-    "max-len": ["error", { code: 120 }],
-    indent: ["error", 2],
-    "linebreak-style": ["error", "unix"],
-    quotes: ["error", "single"],
-    semi: ["error", "always"],
-    "comma-dangle": ["error", "always-multiline"],
+    // Formatting
+    quotes: ["error", "single"], // Single quotes
+    semi: ["error", "always"], // Always semicolons
+    "linebreak-style": ["error", "unix"], // LF endings
+    "comma-dangle": ["error", "always-multiline"], // Trailing commas
     "object-curly-spacing": ["error", "always"],
     "array-bracket-spacing": ["error", "never"],
     "arrow-parens": ["error", "always"],
-    "no-param-reassign": "off", // Allow parameter reassignment for Express
-    "consistent-return": "off", // Allow different return types
-    "no-return-await": "off", // Allow return await
-    "prefer-destructuring": "off", // Allow both destructuring and dot notation
-    "no-restricted-syntax": "off", // Allow for...of loops
-    "guard-for-in": "off", // Allow for...in loops
-    "no-continue": "off", // Allow continue statements
-    "no-plusplus": "off", // Allow increment/decrement operators
-    "no-bitwise": "off", // Allow bitwise operators
-    "no-mixed-operators": "off", // Allow mixed operators
-    "no-nested-ternary": "off", // Allow nested ternary operators
-    "import/extensions": "off", // Allow imports without extensions
-    "import/prefer-default-export": "off", // Allow named exports
-    "import/no-extraneous-dependencies": "off", // Allow dev dependencies in tests
+    "max-len": ["error", { code: 120, ignoreUrls: true }], // Allow long URLs in code
+    indent: ["error", 2],
+
+    // Code style preferences
+    "no-console": "off", // Allow console.log for backend
+    "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    "no-underscore-dangle": "off",
+    camelcase: "off",
+    radix: ["error", "always"], // Require radix param in parseInt
+    "no-param-reassign": "off",
+    "consistent-return": "off",
+    "no-return-await": "off",
+    "prefer-destructuring": "off",
+    "no-restricted-syntax": "off",
+    "guard-for-in": "off",
+    "no-continue": "off",
+    "no-plusplus": "off",
+    "no-bitwise": "off",
+    "no-mixed-operators": "off",
+    "no-nested-ternary": "off",
+
+    // Import rules
+    "import/extensions": "off",
+    "import/prefer-default-export": "off",
+    "import/no-extraneous-dependencies": "off",
   },
   overrides: [
     {

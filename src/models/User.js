@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { isValidPhoneNumber } = require("../utils/phoneUtils");
 
 const userSchema = new mongoose.Schema(
   {
@@ -44,6 +45,14 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       default: null,
+      validate: {
+        validator: function (value) {
+          // Allow null/undefined values (optional field)
+          if (!value) return true;
+          return isValidPhoneNumber(value);
+        },
+        message: "Phone number must include country code (e.g., +1234567890)",
+      },
     },
   },
   {
@@ -76,6 +85,17 @@ userSchema.methods.hashPassword = async function (password) {
 userSchema.pre("save", async function (next) {
   if (this.isModified("passwordHash")) {
     // Password is already hashed when passed to this model
+    next();
+  } else {
+    next();
+  }
+});
+
+// Pre-save middleware to ensure phone number has country code
+userSchema.pre("save", function (next) {
+  if (this.phone && !this.phone.startsWith("+")) {
+    // If phone number doesn't start with +, we can't auto-format without country info
+    // This will be caught by the validation and show an error
     next();
   } else {
     next();

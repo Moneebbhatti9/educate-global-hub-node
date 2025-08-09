@@ -162,15 +162,32 @@ const storeRefreshToken = async (userId, tokenHash, expiresAt) => {
 };
 
 // Verify refresh token
-const verifyRefreshToken = async (userId, tokenHash) => {
-  const token = await RefreshToken.findOne({
-    userId,
-    tokenHash,
-    isRevoked: false,
-    expiresAt: { $gt: new Date() },
-  });
+const verifyRefreshToken = async (refreshToken) => {
+  try {
+    // First decode the refresh token to get user info
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-  return token;
+    // Find the token in database
+    const token = await RefreshToken.findOne({
+      userId: decoded.userId,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!token) {
+      return { isValid: false, message: "Invalid refresh token" };
+    }
+
+    // Verify the token hash matches
+    const isHashValid = await comparePassword(refreshToken, token.tokenHash);
+    if (!isHashValid) {
+      return { isValid: false, message: "Invalid refresh token" };
+    }
+
+    return { isValid: true, userId: decoded.userId };
+  } catch (error) {
+    return { isValid: false, message: "Invalid refresh token" };
+  }
 };
 
 // Revoke refresh token

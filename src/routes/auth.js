@@ -68,12 +68,12 @@ router.post(
 // @route   POST /api/v1/auth/refresh
 // @desc    Refresh access token
 // @access  Public
-router.post("/refresh", refresh);
+router.post("/refresh", validate("refresh"), refresh);
 
 // @route   POST /api/v1/auth/logout
 // @desc    Logout user
 // @access  Private
-router.post("/logout", logout);
+router.post("/logout", validate("logout"), logout);
 
 // @route   GET /api/v1/auth/me
 // @desc    Get current user

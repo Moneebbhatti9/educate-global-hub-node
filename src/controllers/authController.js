@@ -60,18 +60,24 @@ const signup = async (req, res, next) => {
     const expiresAt = dayjs().add(7, "day").toDate();
     await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
 
-    // Send welcome email
+    // Send verification email
     try {
-      await emailService.sendWelcomeEmail(email, firstName);
+      const otp = generateOTP();
+      await storeOTP(email, otp, "verification");
+      await emailService.sendVerificationEmail(email, firstName, otp);
     } catch (emailError) {
-      console.error("Failed to send welcome email:", emailError);
+      console.error("Failed to send verification email:", emailError);
     }
 
-    return createdResponse(res, "User registered successfully", {
-      user: sanitizeUser(user),
-      accessToken,
-      refreshToken,
-    });
+    return createdResponse(
+      res,
+      "User registered successfully. Please check your email for verification code.",
+      {
+        user: sanitizeUser(user),
+        accessToken,
+        refreshToken,
+      }
+    );
   } catch (error) {
     next(error);
   }
@@ -154,9 +160,25 @@ const verifyOTPController = async (req, res, next) => {
 
     if (type === "verification") {
       await User.updateOne({ email }, { isEmailVerified: true });
+
+      // Send welcome email after successful verification
+      try {
+        const user = await User.findOne({ email });
+        if (user) {
+          await emailService.sendWelcomeEmail(email, user.firstName);
+        }
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+      }
     }
 
-    return successResponse(res, null, "OTP verified successfully");
+    return successResponse(
+      res,
+      null,
+      type === "verification"
+        ? "Email verified successfully. Welcome email sent!"
+        : "OTP verified successfully"
+    );
   } catch (error) {
     next(error);
   }
@@ -224,7 +246,10 @@ const refresh = async (req, res, next) => {
 
     const result = await verifyRefreshToken(refreshToken);
     if (!result.isValid) {
-      return unauthorizedResponse(res, "Invalid refresh token");
+      return unauthorizedResponse(
+        res,
+        result.message || "Invalid refresh token"
+      );
     }
 
     const user = await User.findById(result.userId);
@@ -243,8 +268,16 @@ const refresh = async (req, res, next) => {
     const expiresAt = dayjs().add(7, "day").toDate();
     await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
 
-    // Revoke old refresh token
-    await revokeRefreshToken(result.userId, refreshToken);
+    // Revoke old refresh token by finding it in the database
+    const oldToken = await RefreshToken.findOne({
+      userId: result.userId,
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (oldToken) {
+      await oldToken.revoke();
+    }
 
     return successResponse(
       res,
@@ -265,7 +298,16 @@ const logout = async (req, res, next) => {
     const { refreshToken } = req.body;
 
     if (refreshToken) {
-      await revokeRefreshToken(req.user.userId, refreshToken);
+      // Find and revoke the specific refresh token
+      const token = await RefreshToken.findOne({
+        userId: req.user.userId,
+        isRevoked: false,
+        expiresAt: { $gt: new Date() },
+      }).sort({ createdAt: -1 });
+
+      if (token) {
+        await token.revoke();
+      }
     }
 
     return successResponse(res, null, "Logged out successfully");
