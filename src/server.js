@@ -18,6 +18,7 @@ const userRoutes = require("./routes/user");
 const uploadRoutes = require("./routes/upload");
 const teacherProfileRoutes = require("./routes/teacherProfile");
 const schoolProfileRoutes = require("./routes/schoolProfile");
+const jobRoutes = require("./routes/jobs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -100,6 +101,7 @@ app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
 app.use(`/api/${apiVersion}/teacher-profiles`, teacherProfileRoutes);
 app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
+app.use(`/api/${apiVersion}/jobs`, jobRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
