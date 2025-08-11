@@ -128,7 +128,6 @@ jobNotificationSchema.index({ userId: 1, type: 1 });
 jobNotificationSchema.index({ userId: 1, category: 1 });
 jobNotificationSchema.index({ userId: 1, priority: 1 });
 jobNotificationSchema.index({ jobId: 1 });
-jobNotificationSchema.index({ expiresAt: 1 });
 jobNotificationSchema.index({ isEmailSent: 1, emailSentAt: 1 });
 jobNotificationSchema.index({ isPushSent: 1, pushSentAt: 1 });
 

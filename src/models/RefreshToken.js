@@ -28,7 +28,6 @@ const refreshTokenSchema = new mongoose.Schema(
 // Index for better query performance
 refreshTokenSchema.index({ userId: 1 });
 refreshTokenSchema.index({ tokenHash: 1 });
-refreshTokenSchema.index({ expiresAt: 1 });
 refreshTokenSchema.index({ isRevoked: 1 });
 
 // TTL index to automatically delete expired tokens
