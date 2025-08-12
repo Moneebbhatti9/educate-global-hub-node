@@ -6,7 +6,6 @@ const userProfileSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     bio: {
       type: String,
@@ -28,7 +27,7 @@ const userProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-userProfileSchema.index({ userId: 1 });
+userProfileSchema.index({ userId: 1 }, { unique: true });
 
 // Virtual populate for user data
 userProfileSchema.virtual("user", {
