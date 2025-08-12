@@ -1,7 +1,7 @@
 const JobService = require("../services/jobService");
 const ApplicationService = require("../services/applicationService");
 const SavedJobService = require("../services/savedJobService");
-const { sendResponse } = require("../utils/response");
+const { successResponse, errorResponse } = require("../utils/response");
 
 class JobController {
   /**
@@ -14,9 +14,9 @@ class JobController {
 
       const job = await JobService.createJob(schoolId, jobData);
 
-      return sendResponse(res, 201, true, "Job created successfully", { job });
+      return successResponse(res, { job }, "Job created successfully", 201);
     } catch (error) {
-      return sendResponse(res, 400, false, error.message);
+      return errorResponse(res, error.message, 400);
     }
   }
 

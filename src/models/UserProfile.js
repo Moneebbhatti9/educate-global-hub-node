@@ -27,7 +27,7 @@ const userProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-userProfileSchema.index({ userId: 1 }, { unique: true });
+// Note: userId index is automatically created by unique: true constraint
 
 // Virtual populate for user data
 userProfileSchema.virtual("user", {

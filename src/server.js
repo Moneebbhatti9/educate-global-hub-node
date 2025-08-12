@@ -19,9 +19,13 @@ const uploadRoutes = require("./routes/upload");
 const teacherProfileRoutes = require("./routes/teacherProfile");
 const schoolProfileRoutes = require("./routes/schoolProfile");
 const jobRoutes = require("./routes/jobs");
+const notificationRoutes = require("./routes/notification");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Trust proxy for rate limiting (needed when behind reverse proxy)
+app.set("trust proxy", 1);
 
 // Connect to MongoDB
 connectDB();
@@ -105,6 +109,7 @@ app.use(`/api/${apiVersion}/upload`, uploadRoutes);
 app.use(`/api/${apiVersion}/teacher-profiles`, teacherProfileRoutes);
 app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
 app.use(`/api/${apiVersion}/jobs`, jobRoutes);
+app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

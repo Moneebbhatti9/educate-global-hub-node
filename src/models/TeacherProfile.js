@@ -108,7 +108,7 @@ const teacherProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-teacherProfileSchema.index({ userId: 1 }, { unique: true });
+// Note: userId index is automatically created by unique: true constraint
 teacherProfileSchema.index({ country: 1 });
 teacherProfileSchema.index({ city: 1 });
 teacherProfileSchema.index({ subject: 1 });
