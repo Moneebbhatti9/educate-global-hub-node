@@ -109,7 +109,16 @@ const paginatedResponse = (res, data, pagination, message = "Success") => {
   );
 };
 
+const sendResponse = (res, statusCode, success, message, data = null, errors = null) => {
+  if (success) {
+    return successResponse(res, data, message, statusCode);
+  } else {
+    return errorResponse(res, message, statusCode, errors);
+  }
+};
+
 module.exports = {
+sendResponse,
   successResponse,
   errorResponse,
   validationErrorResponse,
