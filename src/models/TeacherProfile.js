@@ -7,7 +7,6 @@ const teacherProfileSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     // Personal Information
     fullName: {
@@ -109,7 +108,7 @@ const teacherProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-teacherProfileSchema.index({ userId: 1 });
+teacherProfileSchema.index({ userId: 1 }, { unique: true });
 teacherProfileSchema.index({ country: 1 });
 teacherProfileSchema.index({ city: 1 });
 teacherProfileSchema.index({ subject: 1 });
