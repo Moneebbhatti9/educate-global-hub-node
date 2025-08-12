@@ -7,7 +7,6 @@ const schoolProfileSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     // Basic Information
     schoolName: {
@@ -139,7 +138,7 @@ const schoolProfileSchema = new mongoose.Schema(
 );
 
 // Index for better query performance
-schoolProfileSchema.index({ userId: 1 });
+schoolProfileSchema.index({ userId: 1 }, { unique: true });
 schoolProfileSchema.index({ country: 1 });
 schoolProfileSchema.index({ city: 1 });
 schoolProfileSchema.index({ schoolType: 1 });
