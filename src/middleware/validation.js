@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const mongoose = require("mongoose");
 
 // Validation schemas
 const validationSchemas = {
@@ -465,8 +466,23 @@ const validateFileUpload = (req, res, next) => {
   next();
 };
 
+// ObjectId validation middleware
+const validateObjectId = (req, res, next) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid ID format",
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   validate,
   validateFileUpload,
+  validateObjectId,
   validationSchemas,
 };
