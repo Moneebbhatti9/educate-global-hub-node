@@ -30,6 +30,20 @@ const authenticateToken = async (req, res, next) => {
       role: user.role,
     };
 
+    // If user is a school, also attach schoolId
+    if (user.role === "school") {
+      const SchoolProfile = require("../models/SchoolProfile");
+      const schoolProfile = await SchoolProfile.findOne({
+        userId: user._id,
+      }).select("_id");
+      if (schoolProfile) {
+        req.user.schoolId = schoolProfile._id;
+        console.log("School profile found:", schoolProfile._id);
+      } else {
+        console.log("No school profile found for user:", user._id);
+      }
+    }
+
     next();
   } catch (error) {
     if (error.name === "JsonWebTokenError") {
@@ -57,6 +71,17 @@ const optionalAuth = async (req, res, next) => {
           email: user.email,
           role: user.role,
         };
+
+        // If user is a school, also attach schoolId
+        if (user.role === "school") {
+          const SchoolProfile = require("../models/SchoolProfile");
+          const schoolProfile = await SchoolProfile.findOne({
+            userId: user._id,
+          }).select("_id");
+          if (schoolProfile) {
+            req.user.schoolId = schoolProfile._id;
+          }
+        }
       }
     }
 
@@ -68,11 +93,14 @@ const optionalAuth = async (req, res, next) => {
 };
 
 // Authorize roles
-const authorizeRoles = (...roles) => {
+const authorizeRoles = (roles) => {
   return (req, res, next) => {
     if (!req.user) {
       return unauthorizedResponse(res, "Authentication required");
     }
+
+    console.log("User role:", req.user.role);
+    console.log("Roles:", roles);
 
     if (!roles.includes(req.user.role)) {
       return forbiddenResponse(res, "Insufficient permissions");

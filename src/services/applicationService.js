@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const JobApplication = require("../models/JobApplication");
 const Job = require("../models/Job");
 const SavedJob = require("../models/SavedJob");
@@ -357,7 +358,7 @@ class ApplicationService {
           },
           {
             $match: {
-              "job.schoolId": new require("mongoose").Types.ObjectId(userId),
+              "job.schoolId": new mongoose.Types.ObjectId(userId),
             },
           },
           {
@@ -372,7 +373,7 @@ class ApplicationService {
         stats = await JobApplication.aggregate([
           {
             $match: {
-              teacherId: new require("mongoose").Types.ObjectId(userId),
+              teacherId: new mongoose.Types.ObjectId(userId),
             },
           },
           {
@@ -410,7 +411,7 @@ class ApplicationService {
           },
           {
             $match: {
-              "job.schoolId": new require("mongoose").Types.ObjectId(userId),
+              "job.schoolId": new mongoose.Types.ObjectId(userId),
             },
           },
           {
@@ -593,7 +594,7 @@ class ApplicationService {
         },
         {
           $match: {
-            "job.schoolId": new require("mongoose").Types.ObjectId(schoolId),
+            "job.schoolId": new mongoose.Types.ObjectId(schoolId),
             status: "reviewing",
             createdAt: { $lt: overdueDate },
           },

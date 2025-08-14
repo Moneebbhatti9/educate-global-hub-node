@@ -13,11 +13,17 @@ const jobSchema = new mongoose.Schema(
       trim: true,
       maxlength: 255,
     },
+    organization: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 255,
+    },
     description: {
       type: String,
       required: true,
       minlength: 50,
-      maxlength: 5000,
+      maxlength: 10000,
     },
     requirements: {
       type: [String],
@@ -178,7 +184,7 @@ const jobSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "published", "active", "expired", "closed", "archived"],
+      enum: ["draft", "published", "expired", "closed"],
       default: "draft",
     },
     viewsCount: {
@@ -219,10 +225,11 @@ const jobSchema = new mongoose.Schema(
 jobSchema.index({ schoolId: 1, status: 1 });
 jobSchema.index({ status: 1, publishedAt: -1 });
 jobSchema.index({ country: 1, city: 1 });
+jobSchema.index({ organization: 1 });
 jobSchema.index({ educationLevel: 1 });
 jobSchema.index({ subjects: 1 });
 jobSchema.index({ jobType: 1 });
-jobSchema.index({ "salaryMin": 1, "salaryMax": 1 });
+jobSchema.index({ salaryMin: 1, salaryMax: 1 });
 jobSchema.index({ applicationDeadline: 1 });
 jobSchema.index({ tags: 1 });
 jobSchema.index({ isUrgent: 1, isFeatured: 1 });
@@ -230,6 +237,7 @@ jobSchema.index({ isUrgent: 1, isFeatured: 1 });
 // Text search index
 jobSchema.index({
   title: "text",
+  organization: "text",
   description: "text",
   requirements: "text",
   subjects: "text",
@@ -271,12 +279,20 @@ jobSchema.virtual("isExpired").get(function () {
 // Pre-save middleware to handle status changes
 jobSchema.pre("save", function (next) {
   // Auto-set expiresAt when publishing
-  if (this.isModified("status") && this.status === "published" && !this.publishedAt) {
+  if (
+    this.isModified("status") &&
+    this.status === "published" &&
+    !this.publishedAt
+  ) {
     this.publishedAt = new Date();
   }
 
   // Auto-set status to expired if deadline passed
-  if (this.applicationDeadline && new Date() > this.applicationDeadline && this.status === "active") {
+  if (
+    this.applicationDeadline &&
+    new Date() > this.applicationDeadline &&
+    this.status === "published"
+  ) {
     this.status = "expired";
   }
 
@@ -307,33 +323,30 @@ jobSchema.methods.decrementApplicants = async function () {
 // Method to sanitize job data for public viewing
 jobSchema.methods.toPublicObject = function () {
   const job = this.toObject();
-  
+
   // Remove sensitive fields
   delete job.schoolId;
   delete job.applicantEmail;
   delete job.viewsCount;
   delete job.applicantsCount;
-  
+
   // Add computed fields
   job.salaryRange = this.salaryRange;
   job.daysPosted = this.daysPosted;
   job.isExpired = this.isExpired;
-  
+
   return job;
 };
 
 // Method to check if job is active and accepting applications
 jobSchema.methods.isAcceptingApplications = function () {
-  return (
-    this.status === "active" &&
-    this.applicationDeadline > new Date()
-  );
+  return this.status === "published" && this.applicationDeadline > new Date();
 };
 
-// Static method to find active jobs
-jobSchema.statics.findActive = function () {
+// Static method to find published jobs
+jobSchema.statics.findPublished = function () {
   return this.find({
-    status: "active",
+    status: "published",
     applicationDeadline: { $gt: new Date() },
   });
 };
@@ -342,7 +355,7 @@ jobSchema.statics.findActive = function () {
 jobSchema.statics.findExpired = function () {
   return this.find({
     applicationDeadline: { $lte: new Date() },
-    status: { $in: ["active", "published"] },
+    status: { $in: ["published"] },
   });
 };
 

@@ -14,7 +14,7 @@ class SavedJobService {
         throw new Error("Job not found");
       }
 
-      if (job.status !== "active") {
+      if (job.status !== "published") {
         throw new Error("Cannot save inactive job");
       }
 
@@ -471,7 +471,7 @@ class SavedJobService {
   static async cleanupExpiredSavedJobs() {
     try {
       const expiredJobs = await Job.find({
-        status: { $in: ["expired", "closed", "archived"] },
+        status: { $in: ["expired", "closed"] },
       });
       const expiredJobIds = expiredJobs.map((job) => job._id);
 

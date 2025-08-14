@@ -4,14 +4,22 @@ const Joi = require("joi");
 const jobValidationSchemas = {
   // Create job schema
   createJob: Joi.object({
+    action: Joi.string().valid("save_draft", "publish").optional().messages({
+      "any.only": "Action must be either 'save_draft' or 'publish'",
+    }),
     title: Joi.string().min(3).max(255).required().messages({
       "string.min": "Job title must be at least 3 characters long",
       "string.max": "Job title cannot exceed 255 characters",
       "any.required": "Job title is required",
     }),
-    description: Joi.string().min(50).max(5000).required().messages({
+    organization: Joi.string().min(2).max(255).required().messages({
+      "string.min": "Organization must be at least 2 characters long",
+      "string.max": "Organization cannot exceed 255 characters",
+      "any.required": "Organization is required",
+    }),
+    description: Joi.string().min(50).max(10000).required().messages({
       "string.min": "Job description must be at least 50 characters long",
-      "string.max": "Job description cannot exceed 5000 characters",
+      "string.max": "Job description cannot exceed 10000 characters",
       "any.required": "Job description is required",
     }),
     requirements: Joi.array()
@@ -114,7 +122,7 @@ const jobValidationSchemas = {
     quickApply: Joi.boolean().default(false).messages({
       "boolean.base": "Quick apply must be a boolean",
     }),
-    externalLink: Joi.string().uri().optional().messages({
+    externalLink: Joi.string().uri().allow("").empty("").optional().messages({
       "string.uri": "External link must be a valid URL",
     }),
     applicationDeadline: Joi.date().min(new Date()).required().messages({
@@ -165,9 +173,13 @@ const jobValidationSchemas = {
       "string.min": "Job title must be at least 3 characters long",
       "string.max": "Job title cannot exceed 255 characters",
     }),
-    description: Joi.string().min(50).max(5000).optional().messages({
+    organization: Joi.string().min(2).max(255).optional().messages({
+      "string.min": "Organization must be at least 2 characters long",
+      "string.max": "Organization cannot exceed 255 characters",
+    }),
+    description: Joi.string().min(50).max(10000).optional().messages({
       "string.min": "Job description must be at least 50 characters long",
-      "string.max": "Job description cannot exceed 5000 characters",
+      "string.max": "Job description cannot exceed 10000 characters",
     }),
     requirements: Joi.array()
       .items(Joi.string().min(1).max(200))
@@ -260,7 +272,7 @@ const jobValidationSchemas = {
     quickApply: Joi.boolean().optional().messages({
       "boolean.base": "Quick apply must be a boolean",
     }),
-    externalLink: Joi.string().uri().optional().messages({
+    externalLink: Joi.string().uri().allow("").empty("").optional().messages({
       "string.uri": "External link must be a valid URL",
     }),
     applicationDeadline: Joi.date().min(new Date()).optional().messages({
@@ -430,15 +442,24 @@ const jobValidationSchemas = {
   // Update job status schema
   updateJobStatus: Joi.object({
     status: Joi.string()
-      .valid("draft", "published", "active", "expired", "closed", "archived")
+      .valid("draft", "published", "expired", "closed")
       .required()
       .messages({
-        "any.only":
-          "Status must be one of: draft, published, active, expired, closed, archived",
+        "any.only": "Status must be one of: draft, published, expired, closed",
         "any.required": "Status is required",
       }),
     notes: Joi.string().max(500).optional().messages({
       "string.max": "Notes cannot exceed 500 characters",
+    }),
+  }),
+
+  // Update job flags schema
+  updateJobFlags: Joi.object({
+    isUrgent: Joi.boolean().optional().messages({
+      "boolean.base": "isUrgent must be a boolean",
+    }),
+    isFeatured: Joi.boolean().optional().messages({
+      "boolean.base": "isFeatured must be a boolean",
     }),
   }),
 

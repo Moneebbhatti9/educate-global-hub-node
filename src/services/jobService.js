@@ -1,37 +1,44 @@
+const mongoose = require("mongoose");
 const Job = require("../models/Job");
 const JobApplication = require("../models/JobApplication");
 const JobView = require("../models/JobView");
 const SavedJob = require("../models/SavedJob");
 const JobNotification = require("../models/JobNotification");
 const { sendEmail } = require("../config/email");
+const { sanitizeDocument } = require("../utils/sanitize");
 
 class JobService {
   /**
    * Create a new job
    */
-  static async createJob(schoolId, jobData) {
+  static async createJob(schoolId, jobData, userId) {
     try {
       // Add school ID to job data
       const job = new Job({
         ...jobData,
         schoolId,
-        status: "draft", // Default status
+        // Status is now passed from controller
       });
 
       await job.save();
 
-      // Create notification for school
-      await JobNotification.createNotification({
-        userId: schoolId,
-        type: "job_posted",
-        title: "Job Created Successfully",
-        message: `Your job "${job.title}" has been created and is now in draft status.`,
-        category: "job",
-        priority: "medium",
-        actionRequired: true,
-        actionUrl: `/jobs/${job._id}/edit`,
-        actionText: "Edit Job",
-      });
+      // Create notification for school user
+      try {
+        await JobNotification.createNotification({
+          userId: userId, // Use the actual user ID, not school profile ID
+          type: "job_posted",
+          title: "Job Created Successfully",
+          message: `Your job "${job.title}" has been created and is now in draft status.`,
+          category: "job",
+          priority: "medium",
+          actionRequired: true,
+          // Remove actionUrl to avoid validation error
+          actionText: "Edit Job",
+        });
+      } catch (notificationError) {
+        console.log("Notification creation failed:", notificationError.message);
+        // Don't fail the job creation if notification fails
+      }
 
       return job;
     } catch (error) {
@@ -51,7 +58,7 @@ class JobService {
       if (populateSchool) {
         query = query.populate(
           "schoolId",
-          "schoolName schoolEmail country city"
+          "schoolName schoolEmail country city aboutSchool"
         );
       }
 
@@ -65,7 +72,7 @@ class JobService {
         });
       }
 
-      const job = await query.exec();
+      const job = await query.lean().exec();
 
       if (!job) {
         throw new Error("Job not found");
@@ -80,7 +87,7 @@ class JobService {
   /**
    * Update job by ID
    */
-  static async updateJob(jobId, schoolId, updateData) {
+  static async updateJob(jobId, schoolId, updateData, userId) {
     try {
       const job = await Job.findOne({ _id: jobId, schoolId });
 
@@ -92,18 +99,23 @@ class JobService {
       Object.assign(job, updateData);
       await job.save();
 
-      // Create notification for school
-      await JobNotification.createNotification({
-        userId: schoolId,
-        type: "job_updated",
-        title: "Job Updated Successfully",
-        message: `Your job "${job.title}" has been updated.`,
-        category: "job",
-        priority: "medium",
-        actionRequired: false,
-        actionUrl: `/jobs/${job._id}`,
-        actionText: "View Job",
-      });
+      // Create notification for school user
+      try {
+        await JobNotification.createNotification({
+          userId: userId, // Use the actual user ID, not school profile ID
+          type: "job_updated",
+          title: "Job Updated Successfully",
+          message: `Your job "${job.title}" has been updated.`,
+          category: "job",
+          priority: "medium",
+          actionRequired: false,
+          // Remove actionUrl to avoid validation error
+          actionText: "View Job",
+        });
+      } catch (notificationError) {
+        console.log("Notification creation failed:", notificationError.message);
+        // Don't fail the job update if notification fails
+      }
 
       return job;
     } catch (error) {
@@ -146,7 +158,7 @@ class JobService {
   /**
    * Update job status
    */
-  static async updateJobStatus(jobId, schoolId, newStatus, notes = "") {
+  static async updateJobStatus(jobId, schoolId, newStatus, notes = "", userId) {
     try {
       const job = await Job.findOne({ _id: jobId, schoolId });
 
@@ -160,28 +172,48 @@ class JobService {
       // Handle status-specific logic
       if (newStatus === "published" && oldStatus === "draft") {
         job.publishedAt = new Date();
-        job.status = "active"; // Auto-activate published jobs
+        job.status = "published"; // Published jobs are live and accepting applications
       }
 
-      if (newStatus === "closed" || newStatus === "archived") {
+      if (newStatus === "closed") {
         // Notify applicants about job closure
         await this.notifyApplicantsAboutJobClosure(jobId, newStatus);
       }
 
       await job.save();
 
-      // Create notification for school
-      await JobNotification.createNotification({
-        userId: schoolId,
-        type: `job_${newStatus}`,
-        title: `Job ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-        message: `Your job "${job.title}" has been ${newStatus}.`,
-        category: "job",
-        priority: "medium",
-        actionRequired: false,
-        actionUrl: `/jobs/${job._id}`,
-        actionText: "View Job",
-      });
+      // Create notification for school user with valid type and no invalid actionUrl
+      try {
+        let notificationType = "job_updated";
+        let notificationMessage = `Your job "${job.title}" status has been updated to ${newStatus}.`;
+
+        // Map status to valid notification types
+        if (newStatus === "published") {
+          notificationType = "job_posted";
+          notificationMessage = `Your job "${job.title}" has been published successfully.`;
+        } else if (newStatus === "closed") {
+          notificationType = "job_closed";
+          notificationMessage = `Your job "${job.title}" has been closed.`;
+        } else if (newStatus === "expired") {
+          notificationType = "job_expired";
+          notificationMessage = `Your job "${job.title}" has expired.`;
+        }
+
+        await JobNotification.createNotification({
+          userId: userId, // Use the actual user ID, not school profile ID
+          type: notificationType,
+          title: `Job Status Updated`,
+          message: notificationMessage,
+          category: "job",
+          priority: "medium",
+          actionRequired: false,
+          // Remove actionUrl to avoid validation error
+          actionText: "View Job",
+        });
+      } catch (notificationError) {
+        console.log("Notification creation failed:", notificationError.message);
+        // Don't fail the job status update if notification fails
+      }
 
       return job;
     } catch (error) {
@@ -203,7 +235,7 @@ class JobService {
       const skip = (page - 1) * limit;
 
       // Build query
-      const query = { status: "active" };
+      const query = { status: "published" };
 
       // Text search
       if (filters.q) {
@@ -308,7 +340,7 @@ class JobService {
       // Execute query
       const [jobs, total] = await Promise.all([
         Job.find(query)
-          .populate("schoolId", "schoolName country city")
+          .populate("schoolId", "schoolName country city aboutSchool")
           .sort(sort)
           .skip(skip)
           .limit(limit)
@@ -353,7 +385,12 @@ class JobService {
       }
 
       const [jobs, total] = await Promise.all([
-        Job.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Job.find(query)
+          .populate("schoolId", "schoolName country city aboutSchool")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
         Job.countDocuments(query),
       ]);
 
@@ -389,7 +426,7 @@ class JobService {
 
       const query = {
         _id: { $ne: jobId },
-        status: "active",
+        status: "published",
         $or: [
           { subjects: { $in: job.subjects } },
           { educationLevel: job.educationLevel },
@@ -399,7 +436,7 @@ class JobService {
       };
 
       const relatedJobs = await Job.find(query)
-        .populate("schoolId", "schoolName country city")
+        .populate("schoolId", "schoolName country city aboutSchool")
         .sort({ publishedAt: -1 })
         .limit(limit)
         .lean();
@@ -495,7 +532,7 @@ class JobService {
         Job.aggregate([
           {
             $match: {
-              schoolId: new require("mongoose").Types.ObjectId(schoolId),
+              schoolId: new mongoose.Types.ObjectId(schoolId),
             },
           },
           {
@@ -518,7 +555,7 @@ class JobService {
           },
           {
             $match: {
-              "job.schoolId": new require("mongoose").Types.ObjectId(schoolId),
+              "job.schoolId": new mongoose.Types.ObjectId(schoolId),
             },
           },
           {
@@ -539,7 +576,7 @@ class JobService {
           },
           {
             $match: {
-              "job.schoolId": new require("mongoose").Types.ObjectId(schoolId),
+              "job.schoolId": new mongoose.Types.ObjectId(schoolId),
               createdAt: {
                 $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
               },
@@ -579,18 +616,30 @@ class JobService {
         job.status = "expired";
         await job.save();
 
-        // Notify school about expired job
-        await JobNotification.createNotification({
-          userId: job.schoolId,
-          type: "job_expired",
-          title: "Job Expired",
-          message: `Your job "${job.title}" has expired and is no longer accepting applications.`,
-          category: "job",
-          priority: "medium",
-          actionRequired: true,
-          actionUrl: `/jobs/${job._id}/edit`,
-          actionText: "Repost Job",
-        });
+        // Find the user ID from the school profile
+        try {
+          const SchoolProfile = require("../models/SchoolProfile");
+          const schoolProfile = await SchoolProfile.findById(job.schoolId);
+          if (schoolProfile && schoolProfile.userId) {
+            // Notify school user about expired job
+            await JobNotification.createNotification({
+              userId: schoolProfile.userId, // Use the user ID from school profile
+              type: "job_expired",
+              title: "Job Expired",
+              message: `Your job "${job.title}" has expired and is no longer accepting applications.`,
+              category: "job",
+              priority: "medium",
+              actionRequired: true,
+              // Remove actionUrl to avoid validation error
+              actionText: "Repost Job",
+            });
+          }
+        } catch (notificationError) {
+          console.log(
+            "Failed to create expired job notification:",
+            notificationError.message
+          );
+        }
       }
 
       return { expiredCount: expiredJobs.length };
@@ -603,20 +652,70 @@ class JobService {
    * Sanitize job data for public viewing
    */
   static sanitizeJobForPublic(job) {
-    const sanitized = { ...job };
+    try {
+      // First sanitize the document to remove Mongoose internals
+      const cleanJob = sanitizeDocument(job);
 
-    // Remove sensitive fields
-    delete sanitized.schoolId;
-    delete sanitized.applicantEmail;
-    delete sanitized.viewsCount;
-    delete sanitized.applicantsCount;
+      // Extract only the fields we want to expose
+      const sanitized = {
+        _id: cleanJob._id,
+        title: cleanJob.title,
+        organization: cleanJob.organization,
+        description: cleanJob.description,
+        requirements: cleanJob.requirements || [],
+        benefits: cleanJob.benefits || [],
+        subjects: cleanJob.subjects || [],
+        educationLevel: cleanJob.educationLevel,
+        positionCategory: cleanJob.positionCategory,
+        positionSubcategory: cleanJob.positionSubcategory,
+        country: cleanJob.country,
+        city: cleanJob.city,
+        salaryMin: cleanJob.salaryMin,
+        salaryMax: cleanJob.salaryMax,
+        currency: cleanJob.currency,
+        salaryDisclose: cleanJob.salaryDisclose,
+        minExperience: cleanJob.minExperience,
+        qualification: cleanJob.qualification,
+        jobType: cleanJob.jobType,
+        visaSponsorship: cleanJob.visaSponsorship,
+        quickApply: cleanJob.quickApply,
+        externalLink: cleanJob.externalLink,
+        applicationDeadline: cleanJob.applicationDeadline,
+        screeningQuestions: cleanJob.screeningQuestions || [],
+        status: cleanJob.status,
+        publishedAt: cleanJob.publishedAt,
+        tags: cleanJob.tags || [],
+        isUrgent: cleanJob.isUrgent,
+        isFeatured: cleanJob.isFeatured,
+        createdAt: cleanJob.createdAt,
+        updatedAt: cleanJob.updatedAt,
+      };
 
-    // Add computed fields
-    sanitized.salaryRange = this.calculateSalaryRange(job);
-    sanitized.daysPosted = this.calculateDaysPosted(job.publishedAt);
-    sanitized.isExpired = this.isJobExpired(job.applicationDeadline);
+      // Add school information if populated
+      if (cleanJob.schoolId && typeof cleanJob.schoolId === "object") {
+        sanitized.school = {
+          name: cleanJob.schoolId.schoolName,
+          country: cleanJob.schoolId.country,
+          city: cleanJob.schoolId.city,
+          description: cleanJob.schoolId.aboutSchool,
+        };
+      }
 
-    return sanitized;
+      // Add computed fields
+      sanitized.salaryRange = this.calculateSalaryRange(cleanJob);
+      sanitized.daysPosted = this.calculateDaysPosted(cleanJob.publishedAt);
+      sanitized.isExpired = this.isJobExpired(cleanJob.applicationDeadline);
+
+      return sanitized;
+    } catch (error) {
+      console.error("Error sanitizing job:", error);
+      // Return a minimal safe object if sanitization fails
+      return {
+        _id: job._id,
+        title: job.title || "Job Title Unavailable",
+        status: job.status || "unknown",
+      };
+    }
   }
 
   /**

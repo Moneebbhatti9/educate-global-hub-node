@@ -10,6 +10,7 @@ const {
 const {
   authenticateToken: authenticate,
   authorizeRoles: authorize,
+  optionalAuth,
 } = require("../middleware/auth");
 
 // Job Management Routes (School only)
@@ -52,6 +53,42 @@ router.patch(
   JobController.updateJobStatus
 );
 
+router.patch(
+  "/:jobId/flags",
+  authenticate,
+  authorize(["school"]),
+  validateJob("updateJobFlags"),
+  JobController.updateJobFlags
+);
+
+// Application Routes - Specific routes must come BEFORE parameterized routes
+router.get(
+  "/applications/stats",
+  authenticate,
+  ApplicationController.getApplicationStats
+);
+
+router.get(
+  "/applications/recent",
+  authenticate,
+  ApplicationController.getRecentApplications
+);
+
+router.get(
+  "/applications/overdue",
+  authenticate,
+  authorize(["school"]),
+  ApplicationController.getOverdueApplications
+);
+
+router.patch(
+  "/applications/bulk/status",
+  authenticate,
+  authorize(["school"]),
+  ApplicationController.bulkUpdateApplicationStatuses
+);
+
+// Now the parameterized routes
 router.get(
   "/:jobId/applications",
   authenticate,
@@ -85,7 +122,9 @@ router.get("/category/:category", JobController.getJobsByCategory);
 
 router.get("/location/:country/:city", JobController.getJobsByLocation);
 
-router.get("/:jobId", JobController.getJobById);
+// Public Job Detail Route - Must be after other specific routes
+// Optional authentication for enhanced features (saved status, application status)
+router.get("/:jobId", optionalAuth, JobController.getJobById);
 
 // Job Recommendations (Teacher only)
 router.get(
@@ -119,7 +158,7 @@ router.patch(
   JobController.bulkUpdateJobStatuses
 );
 
-// Application Routes
+// Application Routes - Parameterized routes
 router.post(
   "/:jobId/apply",
   authenticate,
@@ -152,33 +191,8 @@ router.post(
 router.get(
   "/applications/teacher/:teacherId",
   authenticate,
+  authorize(["school"]),
   ApplicationController.getApplicationsByTeacher
-);
-
-router.get(
-  "/applications/stats",
-  authenticate,
-  ApplicationController.getApplicationStats
-);
-
-router.get(
-  "/applications/recent",
-  authenticate,
-  ApplicationController.getRecentApplications
-);
-
-router.get(
-  "/applications/overdue",
-  authenticate,
-  authorize(["school"]),
-  ApplicationController.getOverdueApplications
-);
-
-router.patch(
-  "/applications/bulk/status",
-  authenticate,
-  authorize(["school"]),
-  ApplicationController.bulkUpdateApplicationStatuses
 );
 
 // Application Status Specific Routes
@@ -280,104 +294,6 @@ router.get(
   authenticate,
   authorize(["teacher"]),
   SavedJobController.getSavedJobStats
-);
-
-router.get(
-  "/saved/to-apply",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getJobsToApply
-);
-
-router.get(
-  "/saved/overdue-reminders",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getOverdueReminders
-);
-
-router.post(
-  "/saved/:savedJobId/reminder",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.setReminder
-);
-
-router.patch(
-  "/saved/:savedJobId/priority",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.updatePriority
-);
-
-router.post(
-  "/saved/:savedJobId/notes",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.addNotes
-);
-
-router.post(
-  "/saved/:savedJobId/tags",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.addTags
-);
-
-router.delete(
-  "/saved/:savedJobId/tags",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.removeTags
-);
-
-router.get(
-  "/saved/by-tags",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getSavedJobsByTags
-);
-
-router.get(
-  "/saved/tags",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getTeacherTags
-);
-
-router.post(
-  "/saved/bulk/save",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.bulkSaveJobs
-);
-
-router.delete(
-  "/saved/bulk/remove",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.bulkRemoveSavedJobs
-);
-
-router.patch(
-  "/saved/:savedJobId/applied",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.markAsApplied
-);
-
-router.get(
-  "/saved/analytics",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getSavedJobAnalytics
-);
-
-router.get(
-  "/saved/export",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.exportSavedJobs
 );
 
 module.exports = router;
