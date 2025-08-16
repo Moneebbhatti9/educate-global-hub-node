@@ -24,25 +24,33 @@ class SavedJobService {
         throw new Error("Job is already saved");
       }
 
-      // Create saved job
-      const savedJob = new SavedJob({
-        teacherId,
-        jobId,
+      // Create saved job with proper field mapping
+      const savedJobData = {
+        teacherId: teacherId,
+        jobId: jobId,
         ...saveData,
+      };
+
+      // Remove undefined or null values to avoid validation errors
+      Object.keys(savedJobData).forEach((key) => {
+        if (savedJobData[key] === undefined || savedJobData[key] === null) {
+          delete savedJobData[key];
+        }
       });
 
+      const savedJob = new SavedJob(savedJobData);
       await savedJob.save();
 
       // Create notification
       await JobNotification.createNotification({
         userId: teacherId,
-        type: "job_saved",
+        type: "system_alert",
         title: "Job Saved Successfully",
         message: `"${job.title}" has been added to your saved jobs.`,
         category: "job",
         priority: "low",
         actionRequired: false,
-        actionUrl: `/saved-jobs/${savedJob._id}`,
+        // Remove actionUrl to avoid validation error
         actionText: "View Saved Job",
       });
 
@@ -241,7 +249,7 @@ class SavedJobService {
         category: "reminder",
         priority: "high",
         actionRequired: true,
-        actionUrl: `/jobs/${savedJob.jobId._id}`,
+        // Remove actionUrl to avoid validation error
         actionText: "Apply Now",
       });
 
@@ -267,25 +275,6 @@ class SavedJobService {
       return savedJob;
     } catch (error) {
       throw new Error(`Failed to update priority: ${error.message}`);
-    }
-  }
-
-  /**
-   * Add notes to saved job
-   */
-  static async addNotes(savedJobId, teacherId, notes) {
-    try {
-      const savedJob = await SavedJob.findOne({ _id: savedJobId, teacherId });
-
-      if (!savedJob) {
-        throw new Error("Saved job not found or access denied");
-      }
-
-      await savedJob.addNotes(notes);
-
-      return savedJob;
-    } catch (error) {
-      throw new Error(`Failed to add notes: ${error.message}`);
     }
   }
 

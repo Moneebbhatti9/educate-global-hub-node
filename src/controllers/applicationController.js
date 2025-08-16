@@ -8,8 +8,29 @@ class ApplicationController {
   static async submitApplication(req, res) {
     try {
       const { jobId } = req.params;
-      const { teacherId } = req.user;
+      const { userId, role } = req.user;
       const applicationData = req.body;
+
+      console.log("Submit application request:", {
+        jobId,
+        userId,
+        role,
+        applicationData,
+      });
+
+      // For teachers, we need to get the TeacherProfile ID from the User ID
+      let teacherId = userId;
+      if (role === "teacher") {
+        const TeacherProfile = require("../models/TeacherProfile");
+        const teacherProfile = await TeacherProfile.findOne({ userId });
+        if (!teacherProfile) {
+          return sendResponse(res, 400, false, "Teacher profile not found");
+        }
+        teacherId = teacherProfile._id;
+        console.log("Found teacher profile:", teacherProfile._id);
+      }
+
+      console.log("Final teacherId:", teacherId);
 
       const application = await ApplicationService.submitApplication(
         jobId,

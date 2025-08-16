@@ -122,9 +122,62 @@ router.get("/category/:category", JobController.getJobsByCategory);
 
 router.get("/location/:country/:city", JobController.getJobsByLocation);
 
+// Saved Jobs Routes (Teacher only) - Must come BEFORE /:jobId route
+router.get(
+  "/saved",
+  authenticate,
+  authorize(["teacher"]),
+  SavedJobController.getSavedJobs
+);
+
+router.get(
+  "/saved/stats",
+  authenticate,
+  authorize(["teacher"]),
+  SavedJobController.getSavedJobStats
+);
+
+router.get(
+  "/saved/:savedJobId",
+  authenticate,
+  authorize(["teacher"]),
+  SavedJobController.getSavedJobById
+);
+
+router.put(
+  "/saved/:savedJobId",
+  authenticate,
+  authorize(["teacher"]),
+  validateJob("updateSavedJob"),
+  SavedJobController.updateSavedJob
+);
+
+router.delete(
+  "/saved/:savedJobId",
+  authenticate,
+  authorize(["teacher"]),
+  SavedJobController.removeSavedJob
+);
+
 // Public Job Detail Route - Must be after other specific routes
 // Optional authentication for enhanced features (saved status, application status)
 router.get("/:jobId", optionalAuth, JobController.getJobById);
+
+// Job Actions (Teacher only) - Must come AFTER /:jobId route
+router.post(
+  "/:jobId/save",
+  authenticate,
+  authorize(["teacher"]),
+  validateJob("saveJob"),
+  SavedJobController.saveJob
+);
+
+router.get(
+  "/:jobId/saved",
+  authenticate,
+  authorize(["teacher"]),
+  SavedJobController.isJobSaved
+);
 
 // Job Recommendations (Teacher only)
 router.get(
@@ -242,58 +295,6 @@ router.get(
   authenticate,
   authorize(["school"]),
   ApplicationController.exportApplications
-);
-
-// Saved Jobs Routes (Teacher only)
-router.post(
-  "/:jobId/save",
-  authenticate,
-  authorize(["teacher"]),
-  validateJob("saveJob"),
-  SavedJobController.saveJob
-);
-
-router.get(
-  "/saved",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getSavedJobs
-);
-
-router.get(
-  "/saved/:savedJobId",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getSavedJobById
-);
-
-router.put(
-  "/saved/:savedJobId",
-  authenticate,
-  authorize(["teacher"]),
-  validateJob("updateSavedJob"),
-  SavedJobController.updateSavedJob
-);
-
-router.delete(
-  "/saved/:savedJobId",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.removeSavedJob
-);
-
-router.get(
-  "/:jobId/saved",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.isJobSaved
-);
-
-router.get(
-  "/saved/stats",
-  authenticate,
-  authorize(["teacher"]),
-  SavedJobController.getSavedJobStats
 );
 
 module.exports = router;

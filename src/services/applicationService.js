@@ -3,7 +3,10 @@ const JobApplication = require("../models/JobApplication");
 const Job = require("../models/Job");
 const SavedJob = require("../models/SavedJob");
 const JobNotification = require("../models/JobNotification");
-const { sendEmail } = require("../config/email");
+const {
+  sendApplicationConfirmationEmail,
+  sendNewApplicationNotificationEmail,
+} = require("../config/email");
 
 class ApplicationService {
   /**
@@ -11,6 +14,13 @@ class ApplicationService {
    */
   static async submitApplication(jobId, teacherId, applicationData) {
     try {
+      console.log("ApplicationService.submitApplication called with:", {
+        jobId,
+        teacherId,
+        applicationData,
+      });
+      console.log("teacherId type:", typeof teacherId, "value:", teacherId);
+
       // Check if job exists and is active
       const job = await Job.findById(jobId);
       if (!job) {
@@ -32,13 +42,47 @@ class ApplicationService {
       }
 
       // Create application
-      const application = new JobApplication({
+      // Ensure required fields are not overridden by request body
+      const applicationFields = {
         ...applicationData,
         jobId,
         teacherId,
         status: "pending",
+      };
+
+      // Remove any undefined or null values that might cause validation issues
+      Object.keys(applicationFields).forEach((key) => {
+        if (
+          applicationFields[key] === undefined ||
+          applicationFields[key] === null
+        ) {
+          delete applicationFields[key];
+        }
       });
 
+      // Ensure required fields are present
+      if (!applicationFields.teacherId) {
+        throw new Error("teacherId is required");
+      }
+      if (!applicationFields.jobId) {
+        throw new Error("jobId is required");
+      }
+
+      // Convert availableFrom to Date if it's a string
+      if (
+        applicationFields.availableFrom &&
+        typeof applicationFields.availableFrom === "string"
+      ) {
+        applicationFields.availableFrom = new Date(
+          applicationFields.availableFrom
+        );
+      }
+
+      console.log("Creating JobApplication with data:", applicationFields);
+
+      const application = new JobApplication(applicationFields);
+
+      console.log("JobApplication instance created:", application);
       await application.save();
 
       // Increment job applicants count
@@ -62,7 +106,7 @@ class ApplicationService {
           category: "application",
           priority: "medium",
           actionRequired: false,
-          actionUrl: `/applications/${application._id}`,
+          // Remove actionUrl to avoid validation error
           actionText: "View Application",
         }),
 
@@ -75,13 +119,27 @@ class ApplicationService {
           category: "application",
           priority: "medium",
           actionRequired: true,
-          actionUrl: `/jobs/${jobId}/applications`,
+          // Remove actionUrl to avoid validation error
           actionText: "Review Applications",
         }),
       ]);
 
+      // Populate job and teacher data for emails
+      const populatedJob = await Job.findById(jobId)
+        .populate("schoolId", "schoolName")
+        .lean();
+
+      const populatedTeacher = await require("../models/TeacherProfile")
+        .findById(teacherId)
+        .select("fullName email country city experience subjects")
+        .lean();
+
       // Send email notifications
-      await this.sendApplicationEmails(application, job);
+      await this.sendApplicationEmails(
+        application,
+        populatedJob,
+        populatedTeacher
+      );
 
       return application;
     } catch (error) {
@@ -448,32 +506,75 @@ class ApplicationService {
   /**
    * Send application emails
    */
-  static async sendApplicationEmails(application, job) {
+  static async sendApplicationEmails(
+    application,
+    populatedJob,
+    populatedTeacher
+  ) {
     try {
-      // Send confirmation email to teacher
-      await sendEmail({
-        to: application.teacherId.email,
-        subject: `Application Submitted - ${job.title}`,
-        template: "application-confirmation",
-        context: {
-          teacherName: application.teacherId.fullName,
-          jobTitle: job.title,
-          schoolName: job.schoolId.schoolName,
-          applicationId: application._id,
-        },
-      });
+      // Prepare template data for teacher confirmation email
+      const teacherTemplateData = {
+        teacherName: populatedTeacher.fullName,
+        jobTitle: populatedJob.title,
+        schoolName: populatedJob.schoolId.schoolName,
+        applicationId: application._id,
+        city: populatedJob.city,
+        country: populatedJob.country,
+        positionCategory: populatedJob.positionCategory,
+        educationLevel: populatedJob.educationLevel,
+        jobType: populatedJob.jobType,
+        isUrgent: populatedJob.isUrgent,
+        applicationDate: new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        dashboardUrl: `${
+          process.env.FRONTEND_URL || "http://localhost:3000"
+        }/dashboard/applications/${application._id}`,
+      };
 
-      // Send notification email to school
-      await sendEmail({
-        to: job.applicantEmail,
-        subject: `New Application Received - ${job.title}`,
-        template: "new-application-notification",
-        context: {
-          jobTitle: job.title,
-          teacherName: application.teacherId.fullName,
-          applicationId: application._id,
-        },
-      });
+      // Prepare template data for school notification email
+      const schoolTemplateData = {
+        jobTitle: populatedJob.title,
+        organization: populatedJob.organization,
+        city: populatedJob.city,
+        country: populatedJob.country,
+        applicationId: application._id,
+        isUrgent: populatedJob.isUrgent,
+        teacherName: populatedTeacher.fullName,
+        teacherEmail: populatedTeacher.email,
+        teacherCity: populatedTeacher.city,
+        teacherCountry: populatedTeacher.country,
+        teacherExperience: populatedTeacher.experience || "Not specified",
+        teacherSubjects: populatedTeacher.subjects
+          ? populatedTeacher.subjects.join(", ")
+          : "Not specified",
+        applicationDate: new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        dashboardUrl: `${
+          process.env.FRONTEND_URL || "http://localhost:3000"
+        }/dashboard/jobs/${populatedJob._id}/applications`,
+      };
+
+      // Send confirmation email to teacher
+      await sendApplicationConfirmationEmail(
+        populatedTeacher.email,
+        teacherTemplateData
+      );
+
+      // Send notification email to school using applicantEmail from job
+      await sendNewApplicationNotificationEmail(
+        populatedJob.applicantEmail,
+        schoolTemplateData
+      );
+
+      console.log(
+        `Application emails sent successfully for application ${application._id}`
+      );
     } catch (error) {
       console.error("Failed to send application emails:", error);
       // Don't throw error for email failures
@@ -537,7 +638,7 @@ class ApplicationService {
         category: "application",
         priority: "medium",
         actionRequired: newStatus === "interviewed" || newStatus === "accepted",
-        actionUrl: `/applications/${application._id}`,
+        // Remove actionUrl to avoid validation error
         actionText: "View Details",
       });
     } catch (error) {

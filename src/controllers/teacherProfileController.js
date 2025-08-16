@@ -2,6 +2,10 @@ const TeacherProfile = require("../models/TeacherProfile");
 const User = require("../models/User");
 const { successResponse, errorResponse } = require("../utils/response");
 const { validateAndFormatPhone } = require("../utils/phoneUtils");
+const {
+  getRecommendedJobsForTeacher,
+  getFallbackJobs,
+} = require("../services/jobRecommendationService");
 
 // Create or update teacher profile
 const createOrUpdateTeacherProfile = async (req, res) => {
@@ -220,9 +224,85 @@ const searchTeachers = async (req, res) => {
   }
 };
 
+// Get recommended jobs for teacher
+const getRecommendedJobs = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { limit = 5 } = req.query;
+
+    // Validate limit parameter
+    const jobLimit = Math.min(Math.max(parseInt(limit), 1), 20); // Between 1 and 20
+
+    // Check if user exists and is a teacher
+    const user = await User.findById(userId);
+    if (!user) {
+      return errorResponse(res, "User not found", 404);
+    }
+
+    if (user.role !== "teacher") {
+      return errorResponse(
+        res,
+        "Only teachers can access job recommendations",
+        403
+      );
+    }
+
+    // Get recommended jobs
+    let recommendedJobs = await getRecommendedJobsForTeacher(userId, jobLimit);
+
+    // If no specific matches found, get fallback jobs
+    if (recommendedJobs.length === 0) {
+      recommendedJobs = await getFallbackJobs(jobLimit);
+    }
+
+    // Add computed fields for each job
+    const jobsWithComputedFields = recommendedJobs.map((job) => {
+      const jobObj = job.toObject ? job.toObject() : job;
+
+      // Calculate days posted
+      if (jobObj.publishedAt) {
+        const now = new Date();
+        const diffTime = Math.abs(now - new Date(jobObj.publishedAt));
+        jobObj.daysPosted = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+
+      // Calculate salary range
+      if (!jobObj.salaryDisclose) {
+        jobObj.salaryRange = "Competitive";
+      } else if (jobObj.salaryMin && jobObj.salaryMax) {
+        jobObj.salaryRange = `${jobObj.salaryMin} - ${jobObj.salaryMax} ${jobObj.currency}`;
+      } else if (jobObj.salaryMin) {
+        jobObj.salaryRange = `From ${jobObj.salaryMin} ${jobObj.currency}`;
+      } else if (jobObj.salaryMax) {
+        jobObj.salaryRange = `Up to ${jobObj.salaryMax} ${jobObj.currency}`;
+      } else {
+        jobObj.salaryRange = "Competitive";
+      }
+
+      // Check if job is expired
+      jobObj.isExpired = new Date() > new Date(jobObj.applicationDeadline);
+
+      return jobObj;
+    });
+
+    return successResponse(res, "Recommended jobs retrieved successfully", {
+      data: jobsWithComputedFields,
+      total: jobsWithComputedFields.length,
+      message:
+        jobsWithComputedFields.length > 0
+          ? `Found ${jobsWithComputedFields.length} recommended jobs`
+          : "No specific matches found, showing recent available jobs",
+    });
+  } catch (error) {
+    console.error("Error in getRecommendedJobs:", error);
+    return errorResponse(res, "Failed to retrieve recommended jobs", 500);
+  }
+};
+
 module.exports = {
   createOrUpdateTeacherProfile,
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,
+  getRecommendedJobs,
 };

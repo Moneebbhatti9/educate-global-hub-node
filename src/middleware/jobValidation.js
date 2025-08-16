@@ -448,7 +448,7 @@ const jobValidationSchemas = {
         "any.only": "Status must be one of: draft, published, expired, closed",
         "any.required": "Status is required",
       }),
-    notes: Joi.string().max(500).optional().messages({
+    notes: Joi.string().max(500).allow("").empty("").optional().messages({
       "string.max": "Notes cannot exceed 500 characters",
     }),
   }),
@@ -483,9 +483,14 @@ const jobValidationSchemas = {
       "string.max": "Reason for applying cannot exceed 1000 characters",
       "any.required": "Reason for applying is required",
     }),
-    additionalComments: Joi.string().max(500).optional().messages({
-      "string.max": "Additional comments cannot exceed 500 characters",
-    }),
+    additionalComments: Joi.string()
+      .max(500)
+      .allow("")
+      .empty("")
+      .optional()
+      .messages({
+        "string.max": "Additional comments cannot exceed 500 characters",
+      }),
     screeningAnswers: Joi.object()
       .pattern(/^.+$/, Joi.string().min(1).max(500))
       .optional()
@@ -522,23 +527,33 @@ const jobValidationSchemas = {
           "Status must be one of: pending, reviewing, shortlisted, interviewed, accepted, rejected, withdrawn",
         "any.required": "Status is required",
       }),
-    notes: Joi.string().max(1000).optional().messages({
+    notes: Joi.string().max(1000).allow("").empty("").optional().messages({
       "string.max": "Notes cannot exceed 1000 characters",
     }),
-    rejectionReason: Joi.string().max(500).optional().messages({
-      "string.max": "Rejection reason cannot exceed 500 characters",
-    }),
+    rejectionReason: Joi.string()
+      .max(500)
+      .allow("")
+      .empty("")
+      .optional()
+      .messages({
+        "string.max": "Rejection reason cannot exceed 500 characters",
+      }),
     interviewDate: Joi.date().min(new Date()).optional().messages({
       "date.min": "Interview date must be in the future",
     }),
-    interviewNotes: Joi.string().max(1000).optional().messages({
-      "string.max": "Interview notes cannot exceed 1000 characters",
-    }),
+    interviewNotes: Joi.string()
+      .max(1000)
+      .allow("")
+      .empty("")
+      .optional()
+      .messages({
+        "string.max": "Interview notes cannot exceed 1000 characters",
+      }),
   }),
 
   // Save job schema
   saveJob: Joi.object({
-    notes: Joi.string().max(500).optional().messages({
+    notes: Joi.string().max(500).allow("").empty("").optional().messages({
       "string.max": "Notes cannot exceed 500 characters",
     }),
     priority: Joi.string()
@@ -562,7 +577,7 @@ const jobValidationSchemas = {
 
   // Update saved job schema
   updateSavedJob: Joi.object({
-    notes: Joi.string().max(500).optional().messages({
+    notes: Joi.string().max(500).allow("").empty("").optional().messages({
       "string.max": "Notes cannot exceed 500 characters",
     }),
     priority: Joi.string()

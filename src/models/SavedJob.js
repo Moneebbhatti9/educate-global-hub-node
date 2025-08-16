@@ -16,10 +16,7 @@ const savedJobSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    notes: {
-      type: String,
-      maxlength: 500,
-    },
+
     priority: {
       type: String,
       enum: ["low", "medium", "high", "urgent"],
@@ -99,12 +96,6 @@ savedJobSchema.methods.setReminder = async function (reminderDate) {
 // Method to update priority
 savedJobSchema.methods.updatePriority = async function (priority) {
   this.priority = priority;
-  return this.save();
-};
-
-// Method to add notes
-savedJobSchema.methods.addNotes = async function (notes) {
-  this.notes = notes;
   return this.save();
 };
 

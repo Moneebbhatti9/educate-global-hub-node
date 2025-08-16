@@ -19,6 +19,10 @@ const emailSubjects = {
   verification: "Verify Your Email - Educate Global Hub",
   passwordReset: "Password Reset Request - Educate Global Hub",
   welcome: "Welcome to Educate Global Hub! 🎉",
+  applicationConfirmation:
+    "Application Submitted Successfully - Educate Global Hub",
+  newApplicationNotification:
+    "New Job Application Received - Educate Global Hub",
 };
 
 // Send email function
@@ -72,9 +76,26 @@ const sendWelcomeEmail = async (email, userName) => {
   return await sendEmail(email, emailSubjects.welcome, html);
 };
 
+// Send application confirmation email to teacher
+const sendApplicationConfirmationEmail = async (email, templateData) => {
+  const html = await getEmailTemplate("application-confirmation", templateData);
+  return await sendEmail(email, emailSubjects.applicationConfirmation, html);
+};
+
+// Send new application notification email to school
+const sendNewApplicationNotificationEmail = async (email, templateData) => {
+  const html = await getEmailTemplate(
+    "new-application-notification",
+    templateData
+  );
+  return await sendEmail(email, emailSubjects.newApplicationNotification, html);
+};
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
+  sendApplicationConfirmationEmail,
+  sendNewApplicationNotificationEmail,
 };

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Submitted Successfully</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px 20px;
+        }
+
+        .success-box {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .success-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .job-details {
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .job-title {
+            color: #1976d2;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .application-info {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .application-id {
+            color: #1976d2;
+            font-weight: 600;
+        }
+
+        .next-steps {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .next-steps h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+
+        .action-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            margin: 20px 0;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+
+        .action-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .highlight {
+            color: #1976d2;
+            font-weight: 600;
+        }
+
+        .urgent-badge {
+            background-color: #dc3545;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Application Submitted Successfully</h1>
+            <p>Your job application has been received and is under review</p>
+        </div>
+
+        <div class="content">
+            <div class="success-box">
+                <div class="success-icon">🎉</div>
+                <h2 style="margin: 0; color: #155724;">Application Confirmed!</h2>
+                <p style="margin: 10px 0 0 0; color: #155724;">Thank you for your interest in this position. Your
+                    application has been successfully submitted and is now being reviewed by the school.</p>
+            </div>
+
+            <div class="job-details">
+                <div class="job-title">
+                    📋 {{jobTitle}}
+                    {{#if isUrgent}}
+                    <span class="urgent-badge">URGENT</span>
+                    {{/if}}
+                </div>
+                <p><strong>School:</strong> {{schoolName}}</p>
+                <p><strong>Location:</strong> {{city}}, {{country}}</p>
+                <p><strong>Position:</strong> {{positionCategory}}</p>
+                <p><strong>Education Level:</strong> {{educationLevel}}</p>
+                <p><strong>Job Type:</strong> {{jobType}}</p>
+            </div>
+
+            <div class="application-info">
+                <h3 style="margin-top: 0; color: #495057;">Application Details</h3>
+                <p><strong>Application ID:</strong> <span class="application-id">{{applicationId}}</span></p>
+                <p><strong>Submitted:</strong> {{applicationDate}}</p>
+                <p><strong>Status:</strong> <span class="highlight">Under Review</span></p>
+                <p><strong>Expected Response:</strong> Within 5-7 business days</p>
+            </div>
+
+            <div class="next-steps">
+                <h3>📋 What Happens Next?</h3>
+                <ul style="color: #856404; line-height: 1.8;">
+                    <li>Your application will be reviewed by the school's hiring team</li>
+                    <li>If shortlisted, you'll be contacted for an interview</li>
+                    <li>You'll receive status updates via email and notifications</li>
+                    <li>You can track your application status in your dashboard</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{dashboardUrl}}" class="action-button">
+                    📊 View Application Status
+                </a>
+            </div>
+
+            <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #495057;">💡 Tips for Success</h3>
+                <ul style="color: #666; line-height: 1.8;">
+                    <li>Keep your profile and resume up to date</li>
+                    <li>Check your email regularly for updates</li>
+                    <li>Prepare for potential interview questions</li>
+                    <li>Consider applying to other relevant positions</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated confirmation from <strong>Educate Global Hub</strong></p>
+            <p>If you have any questions, please contact our support team</p>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">
+                © 2024 Educate Global Hub. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

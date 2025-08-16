@@ -7,6 +7,7 @@ const {
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,
+  getRecommendedJobs,
 } = require("../controllers/teacherProfileController");
 
 // Create or update teacher profile (requires authentication)
@@ -25,5 +26,8 @@ router.get("/:teacherId", getTeacherProfileById);
 
 // Search teachers (public route)
 router.get("/search", searchTeachers);
+
+// Get recommended jobs for teacher (requires authentication)
+router.get("/me/recommended-jobs", authenticateToken, getRecommendedJobs);
 
 module.exports = router;
