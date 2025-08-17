@@ -55,6 +55,11 @@
             border-radius: 5px;
         }
 
+        .notification-title {
+            margin-top: 0;
+            color: #28a745;
+        }
+
         .job-details {
             background-color: #e3f2fd;
             border: 1px solid #bbdefb;
@@ -102,6 +107,27 @@
             transform: translateY(-2px);
         }
 
+        .action-center {
+            text-align: center;
+        }
+
+        .next-steps-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .next-steps-title {
+            margin-top: 0;
+            color: #495057;
+        }
+
+        .next-steps-list {
+            color: #666;
+            line-height: 1.8;
+        }
+
         .footer {
             background-color: #f8f9fa;
             padding: 20px;
@@ -125,6 +151,12 @@
             display: inline-block;
             margin-left: 10px;
         }
+
+        .footer-copyright {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #999;
+        }
     </style>
 </head>
 
@@ -137,7 +169,7 @@
 
         <div class="content">
             <div class="notification-box">
-                <h2 style="margin-top: 0; color: #28a745;">Application Notification</h2>
+                <h2 class="notification-title">Application Notification</h2>
                 <p>A new teacher has submitted an application for your job posting. Please review the application and
                     take appropriate action.</p>
             </div>
@@ -165,15 +197,15 @@
                 <p><strong>Subjects:</strong> {{teacherSubjects}}</p>
             </div>
 
-            <div style="text-align: center;">
+            <div class="action-center">
                 <a href="{{dashboardUrl}}" class="action-button">
                     📊 View Application Dashboard
                 </a>
             </div>
 
-            <div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
-                <h3 style="margin-top: 0; color: #495057;">Next Steps</h3>
-                <ul style="color: #666; line-height: 1.8;">
+            <div class="next-steps-section">
+                <h3 class="next-steps-title">Next Steps</h3>
+                <ul class="next-steps-list">
                     <li>Review the candidate's application and resume</li>
                     <li>Check their qualifications against your requirements</li>
                     <li>Schedule an interview if they meet your criteria</li>
@@ -185,7 +217,7 @@
         <div class="footer">
             <p>This is an automated notification from <strong>Educate Global Hub</strong></p>
             <p>If you have any questions, please contact our support team</p>
-            <p style="margin-top: 15px; font-size: 12px; color: #999;">
+            <p class="footer-copyright">
                 © 2024 Educate Global Hub. All rights reserved.
             </p>
         </div>
