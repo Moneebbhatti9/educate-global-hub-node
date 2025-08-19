@@ -1,4 +1,8 @@
 const TeacherProfile = require("../models/TeacherProfile");
+const TeacherEmployment = require("../models/TeacherEmployment");
+const TeacherEducation = require("../models/TeacherEducation");
+const TeacherQualification = require("../models/TeacherQualification");
+const TeacherReferee = require("../models/TeacherReferee");
 const User = require("../models/User");
 const { successResponse, errorResponse } = require("../utils/response");
 const { validateAndFormatPhone } = require("../utils/phoneUtils");
@@ -25,31 +29,25 @@ const createOrUpdateTeacherProfile = async (req, res) => {
       yearsOfTeachingExperience,
       professionalBio,
       keyAchievements,
-      certifications,
-      additionalQualifications,
     } = req.body;
 
-    // Check if user exists and is a teacher
+    //  Check if user exists and is a teacher
     const user = await User.findById(userId);
-    if (!user) {
-      return errorResponse(res, "User not found", 404);
-    }
-
-    if (user.role !== "teacher") {
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "teacher")
       return errorResponse(
         res,
         "Only teachers can create teacher profiles",
         403
       );
-    }
 
-    // Validate and format phone number
+    //  Validate and format phone number
     const phoneValidation = validateAndFormatPhone(phoneNumber, country);
     if (!phoneValidation.isValid) {
       return errorResponse(res, phoneValidation.error, 400);
     }
 
-    // Check if profile already exists
+    //  Check if profile exists
     let teacherProfile = await TeacherProfile.findOne({ userId });
 
     if (teacherProfile) {
@@ -68,8 +66,6 @@ const createOrUpdateTeacherProfile = async (req, res) => {
         yearsOfTeachingExperience,
         professionalBio,
         keyAchievements: keyAchievements || [],
-        certifications: certifications || [],
-        additionalQualifications: additionalQualifications || [],
       };
 
       teacherProfile = await TeacherProfile.findOneAndUpdate(
@@ -94,28 +90,43 @@ const createOrUpdateTeacherProfile = async (req, res) => {
         yearsOfTeachingExperience,
         professionalBio,
         keyAchievements: keyAchievements || [],
-        certifications: certifications || [],
-        additionalQualifications: additionalQualifications || [],
       });
 
       await teacherProfile.save();
     }
 
-    // Check if profile is complete
-    const completion = teacherProfile.checkProfileCompletion();
+    //  Compute profile completion
+    const completion = await TeacherProfile.checkProfileCompletion();
     teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100; // still keep boolean
+    teacherProfile.isProfileComplete = completion === 100;
     await teacherProfile.save();
 
-    // Update user's profile completion status
+    // Update User document
     await User.findByIdAndUpdate(userId, {
       profileCompletion: completion,
       isProfileComplete: completion === 100,
     });
+    const [employment, education, qualifications, referees] = await Promise.all(
+      [
+        TeacherEmployment.find({ teacherId: teacherProfile._id }),
+        TeacherEducation.find({ teacherId: teacherProfile._id }),
+        TeacherQualification.find({ teacherId: teacherProfile._id }),
+        TeacherReferee.find({ teacherId: teacherProfile._id }),
+      ]
+    );
 
+    // Return response
     return successResponse(res, "Teacher profile updated successfully", {
-      data: teacherProfile,
-      message: isComplete ? "Profile is complete" : "Profile is incomplete",
+      data: {
+        ...teacherProfile.toObject(),
+        employment,
+        education,
+        qualifications,
+        referees,
+      },
+      message: teacherProfile.isProfileComplete
+        ? "Profile is complete"
+        : "Profile is incomplete",
     });
   } catch (error) {
     console.error("Error in createOrUpdateTeacherProfile:", error);
@@ -132,13 +143,26 @@ const getTeacherProfile = async (req, res) => {
       "user",
       "email firstName lastName role"
     );
-
-    if (!teacherProfile) {
+    if (!teacherProfile)
       return errorResponse(res, "Teacher profile not found", 404);
-    }
+
+    const [employment, education, qualifications, referees] = await Promise.all(
+      [
+        TeacherEmployment.find({ teacherId: teacherProfile._id }),
+        TeacherEducation.find({ teacherId: teacherProfile._id }),
+        TeacherQualification.find({ teacherId: teacherProfile._id }),
+        TeacherReferee.find({ teacherId: teacherProfile._id }),
+      ]
+    );
 
     return successResponse(res, "Teacher profile retrieved successfully", {
-      data: teacherProfile,
+      data: {
+        ...teacherProfile.toObject(),
+        employment,
+        education,
+        qualifications,
+        referees,
+      },
     });
   } catch (error) {
     console.error("Error in getTeacherProfile:", error);
@@ -155,15 +179,26 @@ const getTeacherProfileById = async (req, res) => {
       userId: teacherId,
     }).populate("user", "firstName lastName email role avatarUrl");
 
-    if (!teacherProfile) {
+    if (!teacherProfile)
       return errorResponse(res, "Teacher profile not found", 404);
-    }
 
-    // Remove sensitive information for public viewing
+    const [employment, education, qualifications, referees] = await Promise.all(
+      [
+        TeacherEmployment.find({ teacherId: teacherProfile._id }),
+        TeacherEducation.find({ teacherId: teacherProfile._id }),
+        TeacherQualification.find({ teacherId: teacherProfile._id }),
+        TeacherReferee.find({ teacherId: teacherProfile._id }),
+      ]
+    );
+
     const publicProfile = {
       ...teacherProfile.toObject(),
-      phoneNumber: undefined, // Don't expose phone number publicly
-      address: undefined, // Don't expose full address publicly
+      phoneNumber: undefined, // temporary undefined can be added if required
+      address: undefined, // temporary undefined can be added if required
+      employment,
+      education,
+      qualifications,
+      referees,
     };
 
     return successResponse(res, "Teacher profile retrieved successfully", {
@@ -175,6 +210,182 @@ const getTeacherProfileById = async (req, res) => {
   }
 };
 
+const addEmployment = async (req, res) => {
+  try {
+    const profile = await TeacherProfile.findOne({ userId: req.user.userId });
+    if (!profile) return errorResponse(res, "Profile not found", 404);
+
+    const employment = await TeacherEmployment.create({
+      ...req.body,
+      teacherId: profile._id,
+    });
+
+    return successResponse(res, "Employment added", { data: employment });
+  } catch (e) {
+    return errorResponse(res, "Failed to add employment", 500);
+  }
+};
+
+const updateEmployment = async (req, res) => {
+  try {
+    const { employmentId } = req.params;
+    const updated = await TeacherEmployment.findOneAndUpdate(
+      { _id: employmentId },
+      { $set: req.body },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Employment not found", 404);
+    return successResponse(res, "Employment updated", { data: updated });
+  } catch (e) {
+    return errorResponse(res, "Failed to update employment", 500);
+  }
+};
+
+const deleteEmployment = async (req, res) => {
+  try {
+    const { employmentId } = req.params;
+    const deleted = await TeacherEmployment.findOneAndDelete({
+      _id: employmentId,
+    });
+    if (!deleted) return errorResponse(res, "Employment not found", 404);
+    return successResponse(res, "Employment deleted", { data: deleted._id });
+  } catch (e) {
+    return errorResponse(res, "Failed to delete employment", 500);
+  }
+};
+
+// ---------- Education ----------
+const addEducation = async (req, res) => {
+  try {
+    const profile = await TeacherProfile.findOne({ userId: req.user.userId });
+    if (!profile) return errorResponse(res, "Profile not found", 404);
+
+    const education = await TeacherEducation.create({
+      ...req.body,
+      teacherId: profile._id,
+    });
+
+    return successResponse(res, "Education added", { data: education });
+  } catch (e) {
+    return errorResponse(res, "Failed to add education", 500);
+  }
+};
+
+const updateEducation = async (req, res) => {
+  try {
+    const { educationId } = req.params;
+    const updated = await TeacherEducation.findOneAndUpdate(
+      { _id: educationId },
+      { $set: req.body },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Education not found", 404);
+    return successResponse(res, "Education updated", { data: updated });
+  } catch (e) {
+    return errorResponse(res, "Failed to update education", 500);
+  }
+};
+
+const deleteEducation = async (req, res) => {
+  try {
+    const { educationId } = req.params;
+    const deleted = await TeacherEducation.findOneAndDelete({
+      _id: educationId,
+    });
+    if (!deleted) return errorResponse(res, "Education not found", 404);
+    return successResponse(res, "Education deleted", { data: deleted._id });
+  } catch (e) {
+    return errorResponse(res, "Failed to delete education", 500);
+  }
+};
+
+// ---------- Qualifications ----------
+const addQualification = async (req, res) => {
+  try {
+    const profile = await TeacherProfile.findOne({ userId: req.user.userId });
+    if (!profile) return errorResponse(res, "Profile not found", 404);
+
+    const qualification = await TeacherQualification.create({
+      ...req.body,
+      teacherId: profile._id,
+    });
+
+    return successResponse(res, "Qualification added", { data: qualification });
+  } catch (e) {
+    return errorResponse(res, "Failed to add qualification", 500);
+  }
+};
+
+const updateQualification = async (req, res) => {
+  try {
+    const { qualificationId } = req.params;
+    const updated = await TeacherQualification.findOneAndUpdate(
+      { _id: qualificationId },
+      { $set: req.body },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Qualification not found", 404);
+    return successResponse(res, "Qualification updated", { data: updated });
+  } catch (e) {
+    return errorResponse(res, "Failed to update qualification", 500);
+  }
+};
+
+const deleteQualification = async (req, res) => {
+  try {
+    const { qualificationId } = req.params;
+    const deleted = await TeacherQualification.findOneAndDelete({
+      _id: qualificationId,
+    });
+    if (!deleted) return errorResponse(res, "Qualification not found", 404);
+    return successResponse(res, "Qualification deleted", { data: deleted._id });
+  } catch (e) {
+    return errorResponse(res, "Failed to delete qualification", 500);
+  }
+};
+
+// ---------- Referees ----------
+const addReferee = async (req, res) => {
+  try {
+    const profile = await TeacherProfile.findOne({ userId: req.user.userId });
+    if (!profile) return errorResponse(res, "Profile not found", 404);
+
+    const referee = await TeacherReferee.create({
+      ...req.body,
+      teacherId: profile._id,
+    });
+
+    return successResponse(res, "Referee added", { data: referee });
+  } catch (e) {
+    return errorResponse(res, "Failed to add referee", 500);
+  }
+};
+
+const updateReferee = async (req, res) => {
+  try {
+    const { refereeId } = req.params;
+    const updated = await TeacherReferee.findOneAndUpdate(
+      { _id: refereeId },
+      { $set: req.body },
+      { new: true }
+    );
+    if (!updated) return errorResponse(res, "Referee not found", 404);
+    return successResponse(res, "Referee updated", { data: updated });
+  } catch (e) {
+    return errorResponse(res, "Failed to update referee", 500);
+  }
+};
+
+const deleteReferee = async (req, res) => {
+  try {
+    const { refereeId } = req.params;
+    const deleted = await TeacherReferee.findOneAndDelete({ _id: refereeId });
+    if (!deleted) return errorResponse(res, "Referee not found", 404);
+    return successResponse(res, "Referee deleted", { data: deleted._id });
+  } catch (e) {
+    return errorResponse(res, "Failed to delete referee", 500);
+  }
+};
 // Search teachers
 const searchTeachers = async (req, res) => {
   try {
@@ -309,4 +520,16 @@ module.exports = {
   getTeacherProfileById,
   searchTeachers,
   getRecommendedJobs,
+  addEmployment,
+  updateEmployment,
+  deleteEmployment,
+  addEducation,
+  updateEducation,
+  deleteEducation,
+  addQualification,
+  updateQualification,
+  deleteQualification,
+  addReferee,
+  updateReferee,
+  deleteReferee,
 };

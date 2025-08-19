@@ -1,0 +1,440 @@
+openapi: 3.0.0
+info:
+  title: Educate Global API
+  version: 1.0.0
+  description: API documentation for teacher profiles and related resources
+
+servers:
+  - url: http://localhost:5000/api-docs
+    description: Local dev server
+  - url: https://educate-global-hub-node-production.up.railway.app/api-docs
+    description: Production server   
+
+tags:
+  - name: TeacherProfile
+    description: Teacher profile operations
+  - name: Employment
+    description: Employment history operations
+  - name: Education
+    description: Education background operations
+  - name: Qualifications
+    description: Teacher qualifications & certifications
+  - name: Referees
+    description: Professional referees
+  - name: Jobs
+    description: Job recommendation system
+
+paths:
+  /teacher-profiles:
+    post:
+      tags: [TeacherProfile]
+      summary: Create or update teacher profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeacherProfileRequest"
+      responses:
+        "200":
+          description: Teacher profile created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /teacher-profiles/me:
+    get:
+      tags: [TeacherProfile]
+      summary: Get current teacher profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Teacher profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /teacher-profiles/{teacherId}:
+    get:
+      tags: [TeacherProfile]
+      summary: Get teacher profile by user ID (public)
+      parameters:
+        - in: path
+          name: teacherId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Teacher profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /teacher-profiles/search:
+    get:
+      tags: [TeacherProfile]
+      summary: Search teacher profiles
+      parameters:
+        - in: query
+          name: country
+          schema: { type: string }
+        - in: query
+          name: city
+          schema: { type: string }
+        - in: query
+          name: subject
+          schema: { type: string }
+        - in: query
+          name: qualification
+          schema: { type: string }
+        - in: query
+          name: minExperience
+          schema: { type: integer }
+        - in: query
+          name: maxExperience
+          schema: { type: integer }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Teachers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedResponse"
+
+  /teacher-profiles/me/recommended-jobs:
+    get:
+      tags: [Jobs]
+      summary: Get recommended jobs for teacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5 }
+      responses:
+        "200":
+          description: Recommended jobs retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  # ===== Employment =====
+  /employment:
+    post:
+      tags: [Employment]
+      summary: Add employment record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Employment"
+      responses:
+        "200":
+          description: Employment added
+  /employment/{id}:
+    put:
+      tags: [Employment]
+      summary: Update employment record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Employment"
+      responses:
+        "200":
+          description: Employment updated
+    delete:
+      tags: [Employment]
+      summary: Delete employment record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Employment deleted
+
+  # ===== Education =====
+  /education:
+    post:
+      tags: [Education]
+      summary: Add education record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Education"
+      responses:
+        "200":
+          description: Education added
+  /education/{id}:
+    put:
+      tags: [Education]
+      summary: Update education record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Education"
+      responses:
+        "200":
+          description: Education updated
+    delete:
+      tags: [Education]
+      summary: Delete education record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Education deleted
+
+  # ===== Qualifications =====
+  /qualifications:
+    post:
+      tags: [Qualifications]
+      summary: Add qualification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Qualification"
+      responses:
+        "200":
+          description: Qualification added
+  /qualifications/{id}:
+    put:
+      tags: [Qualifications]
+      summary: Update qualification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Qualification"
+      responses:
+        "200":
+          description: Qualification updated
+    delete:
+      tags: [Qualifications]
+      summary: Delete qualification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Qualification deleted
+
+  # ===== Referees =====
+  /referees:
+    post:
+      tags: [Referees]
+      summary: Add referee
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Referee"
+      responses:
+        "200":
+          description: Referee added
+  /referees/{id}:
+    put:
+      tags: [Referees]
+      summary: Update referee
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Referee"
+      responses:
+        "200":
+          description: Referee updated
+    delete:
+      tags: [Referees]
+      summary: Delete referee
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Referee deleted
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data: {}
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        pagination:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            pages: { type: integer }
+
+    TeacherProfileRequest:
+      type: object
+      required: [fullName, phoneNumber, country, city, province, zipCode, address, qualification, subject, yearsOfTeachingExperience, professionalBio]
+      properties:
+        fullName: { type: string }
+        phoneNumber: { type: string }
+        country: { type: string }
+        city: { type: string }
+        province: { type: string }
+        zipCode: { type: string }
+        address: { type: string }
+        qualification: { type: string, enum: ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"] }
+        subject: { type: string }
+        pgce: { type: boolean }
+        yearsOfTeachingExperience: { type: integer }
+        professionalBio: { type: string }
+        keyAchievements: { type: array, items: { type: string } }
+        certifications: { type: array, items: { type: string } }
+        additionalQualifications: { type: array, items: { type: string } }
+
+    Employment:
+      type: object
+      required: [jobTitle, employer, startDate]
+      properties:
+        jobTitle: { type: string }
+        employer: { type: string }
+        location: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        isCurrent: { type: boolean }
+        responsibilities: { type: array, items: { type: string } }
+        contactPerson:
+          type: object
+          properties:
+            name: { type: string }
+            position: { type: string }
+            email: { type: string }
+
+    Education:
+      type: object
+      required: [educationType, degree, institution, startDate]
+      properties:
+        educationType: { type: string, enum: ["University", "School", "Other"] }
+        degree: { type: string }
+        institution: { type: string }
+        fieldOfStudy: { type: string }
+        gpa: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        thesisTitle: { type: string }
+        honorsAwards: { type: array, items: { type: string } }
+
+    Qualification:
+      type: object
+      required: [title, issuingInstitution, issueDate]
+      properties:
+        title: { type: string }
+        issuingInstitution: { type: string }
+        subjectArea: { type: string }
+        certificationId: { type: string }
+        issueDate: { type: string, format: date }
+        expiryDate: { type: string, format: date }
+        ageRanges: { type: array, items: { type: string } }
+        description: { type: string }
+
+    Referee:
+      type: object
+      required: [fullName, email]
+      properties:
+        fullName: { type: string }
+        position: { type: string }
+        organization: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        relationship: { type: string }
+        yearsKnown: { type: integer }
+        notes: { type: string }
