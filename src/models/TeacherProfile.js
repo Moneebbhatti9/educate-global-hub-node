@@ -101,6 +101,10 @@ const teacherProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    profileCompletion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -155,9 +159,15 @@ teacherProfileSchema.methods.checkProfileCompletion = function () {
     "professionalBio",
   ];
 
-  return requiredFields.every(
-    (field) => this[field] && this[field].toString().trim() !== ""
-  );
+  let filled = 0;
+  requiredFields.forEach((field) => {
+    if (this[field] && this[field].toString().trim() !== "") {
+      filled++;
+    }
+  });
+
+  // return percentage instead of true/false
+  return Math.round((filled / requiredFields.length) * 100);
 };
 
 module.exports = mongoose.model("TeacherProfile", teacherProfileSchema);

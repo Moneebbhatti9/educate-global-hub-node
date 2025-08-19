@@ -102,12 +102,16 @@ const createOrUpdateTeacherProfile = async (req, res) => {
     }
 
     // Check if profile is complete
-    const isComplete = teacherProfile.checkProfileCompletion();
-    teacherProfile.isProfileComplete = isComplete;
+    const completion = teacherProfile.checkProfileCompletion();
+    teacherProfile.profileCompletion = completion;
+    teacherProfile.isProfileComplete = completion === 100; // still keep boolean
     await teacherProfile.save();
 
     // Update user's profile completion status
-    await User.findByIdAndUpdate(userId, { isProfileComplete: isComplete });
+    await User.findByIdAndUpdate(userId, {
+      profileCompletion: completion,
+      isProfileComplete: completion === 100,
+    });
 
     return successResponse(res, "Teacher profile updated successfully", {
       data: teacherProfile,
