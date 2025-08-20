@@ -1,14 +1,16 @@
 openapi: 3.0.0
 info:
-  title: Educate Global API
+  title: Educate Global Hub API
   version: 1.0.0
-  description: API documentation for teacher profiles and related resources
-
+  description: |
+    Full API documentation for Teacher Profile management, including per-section CRUD for
+    Employment, Education, Qualifications, Referees, Certifications, Professional Development,
+    and Memberships. All protected routes require a Bearer JWT token.
 servers:
-  - url: http://localhost:5000
-    description: Local dev server
-  - url: https://educate-global-hub-node-production.up.railway.app
-    description: Production server
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+  - url: https://educate-global-hub-node-production.up.railway.app/api/v1
+    description: Production server (Railway)
 
 tags:
   - name: Health
@@ -18,568 +20,231 @@ tags:
   - name: Users
     description: User management operations
   - name: TeacherProfile
-    description: Teacher profile operations
-  - name: SchoolProfile
-    description: School profile operations
+    description: Core teacher profile create/read/update and search
   - name: Employment
-    description: Employment history operations
+    description: Employment history CRUD
   - name: Education
-    description: Education background operations
+    description: Education history CRUD
   - name: Qualifications
-    description: Teacher qualifications & certifications
+    description: Qualifications & certifications (teacher-level)
   - name: Referees
-    description: Professional referees
+    description: Professional referees CRUD
+  - name: Certifications
+    description: Professional certifications (separate collection)
+  - name: Development
+    description: Professional development (courses, workshops)
+  - name: Memberships
+    description: Professional memberships and associations
   - name: Jobs
-    description: Job management and search
-  - name: Applications
-    description: Job application management
-  - name: SavedJobs
-    description: Saved jobs management
-  - name: Uploads
-    description: File upload operations
-  - name: Notifications
-    description: Notification management
-
+    description: Job recommendations
+  - name: Dependents
+    description: Teacher dependents (family members)
+  - name: Activities
+    description: Extracurricular activities
 paths:
-  # ===== Health Check =====
-  /health:
-    get:
-      tags: [Health]
-      summary: Health check endpoint
-      description: Check if the API is running
-      responses:
-        "200":
-          description: API is running
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  message: { type: string }
-                  timestamp: { type: string, format: date-time }
-                  environment: { type: string }
-
-  # ===== Authentication =====
-  /auth/signup:
-    post:
-      tags: [Authentication]
-      summary: Register a new user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SignupRequest"
-      responses:
-        "201":
-          description: User registered successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-        "400":
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/login:
-    post:
-      tags: [Authentication]
-      summary: Authenticate user and get token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResponse"
-        "401":
-          description: Invalid credentials
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/send-otp:
-    post:
-      tags: [Authentication]
-      summary: Send OTP for email verification or password reset
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SendOTPRequest"
-      responses:
-        "200":
-          description: OTP sent successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/verify-otp:
-    post:
-      tags: [Authentication]
-      summary: Verify OTP and mark email as verified
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VerifyOTPRequest"
-      responses:
-        "200":
-          description: OTP verified successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/password-reset:
-    post:
-      tags: [Authentication]
-      summary: Send password reset email
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PasswordResetRequest"
-      responses:
-        "200":
-          description: Password reset email sent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/password-reset-confirm:
-    post:
-      tags: [Authentication]
-      summary: Reset password with OTP
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PasswordResetConfirmRequest"
-      responses:
-        "200":
-          description: Password reset successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/refresh:
-    post:
-      tags: [Authentication]
-      summary: Refresh access token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshRequest"
-      responses:
-        "200":
-          description: Token refreshed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResponse"
-
-  /auth/logout:
-    post:
-      tags: [Authentication]
-      summary: Logout user
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LogoutRequest"
-      responses:
-        "200":
-          description: Logout successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /auth/me:
-    get:
-      tags: [Authentication]
-      summary: Get current user
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Current user retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Users =====
-  /users/complete-profile:
-    post:
-      tags: [Users]
-      summary: Complete user profile
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CompleteProfileRequest"
-      responses:
-        "200":
-          description: Profile completed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /users/profile:
-    get:
-      tags: [Users]
-      summary: Get current user profile
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: User profile retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    put:
-      tags: [Users]
-      summary: Update user profile
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateProfileRequest"
-      responses:
-        "200":
-          description: Profile updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /users/{id}:
-    get:
-      tags: [Users]
-      summary: Get public user profile by ID
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: User profile retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /users:
-    get:
-      tags: [Users]
-      summary: Get users list with filtering and pagination
-      parameters:
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-        - in: query
-          name: role
-          schema: { type: string }
-        - in: query
-          name: country
-          schema: { type: string }
-      responses:
-        "200":
-          description: Users list retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /users/avatar:
-    put:
-      tags: [Users]
-      summary: Update user avatar
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                avatar:
-                  type: string
-                  format: binary
-      responses:
-        "200":
-          description: Avatar updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /users/account:
-    delete:
-      tags: [Users]
-      summary: Delete user account
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Account deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== School Profiles =====
-  /school-profiles:
-    post:
-      tags: [SchoolProfile]
-      summary: Create or update school profile
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SchoolProfileRequest"
-      responses:
-        "200":
-          description: School profile created or updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /school-profiles/me:
-    get:
-      tags: [SchoolProfile]
-      summary: Get current user's school profile
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: School profile retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /school-profiles/{schoolId}:
-    get:
-      tags: [SchoolProfile]
-      summary: Get school profile by ID (public)
-      parameters:
-        - in: path
-          name: schoolId
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: School profile retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /school-profiles/search:
-    get:
-      tags: [SchoolProfile]
-      summary: Search schools
-      parameters:
-        - in: query
-          name: country
-          schema: { type: string }
-        - in: query
-          name: city
-          schema: { type: string }
-        - in: query
-          name: type
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Schools list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
+  #################################################################
+  # Teacher profile (core)
+  #################################################################
   /teacher-profiles:
     post:
       tags: [TeacherProfile]
-      summary: Create or update teacher profile
+      summary: Create or update the current user's teacher profile
+      description: Creates a new TeacherProfile if none exists for the authenticated user, or updates the existing profile. This endpoint accepts the core (non-repeatable) fields. Repeatable sections (employment, education, qualifications, referees, certifications, development, memberships) have their own endpoints.
       security:
         - bearerAuth: []
       requestBody:
+        description: Core profile fields. Use the per-section endpoints to add lists (employment, education, qualifications etc.)
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/TeacherProfileRequest"
+            example:
+              fullName: "Sarah Johnson"
+              phoneNumber: "+1-555-123-4567"
+              country: "United States"
+              city: "Boston"
+              province: "Massachusetts"
+              zipCode: "02101"
+              address: "123 Maple Street"
+              qualification: "Master"
+              subject: "Mathematics"
+              pgce: true
+              yearsOfTeachingExperience: 6
+              professionalBio: "Mathematics teacher with a passion for student-centred learning."
+              keyAchievements:
+                - "Led department curriculum update (2022)"
+                - "Published article on differentiated assessment"
       responses:
         "200":
-          description: Teacher profile created or updated
+          description: Profile created or updated successfully (returns aggregated profile)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/TeacherProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /teacher-profiles/me:
     get:
       tags: [TeacherProfile]
-      summary: Get current teacher profile
+      summary: Get the authenticated teacher's full aggregated profile
+      description: Returns the profile document plus all related sections (employment, education, qualifications, referees, certifications, development, memberships). Requires authentication.
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Teacher profile retrieved
+          description: Aggregated teacher profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/TeacherProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /teacher-profiles/{teacherId}:
     get:
       tags: [TeacherProfile]
-      summary: Get teacher profile by user ID (public)
+      summary: Get public teacher profile by user id
+      description: Public view — sensitive fields such as exact phone number and full address are intentionally omitted. Includes non-sensitive sections (education, qualifications, employment summaries). Use this for public profile pages.
       parameters:
-        - in: path
-          name: teacherId
-          required: true
-          schema:
-            type: string
+        - $ref: "#/components/parameters/teacherId"
       responses:
         "200":
-          description: Teacher profile retrieved
+          description: Public teacher profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/TeacherProfilePublicResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /teacher-profiles/search:
     get:
       tags: [TeacherProfile]
       summary: Search teacher profiles
+      description: Search by country, city, subject, qualification and experience range. Returns paginated results.
       parameters:
         - in: query
           name: country
           schema: { type: string }
+          description: Partial or full country name (case-insensitive)
         - in: query
           name: city
           schema: { type: string }
+          description: Partial or full city name
         - in: query
           name: subject
           schema: { type: string }
+          description: Search by subject taught
         - in: query
           name: qualification
           schema: { type: string }
+          description: Filter by qualification (e.g., Master)
         - in: query
           name: minExperience
           schema: { type: integer }
+          description: Minimum years of experience
         - in: query
           name: maxExperience
           schema: { type: integer }
+          description: Maximum years of experience
         - in: query
           name: page
           schema: { type: integer, default: 1 }
+          description: Page number
         - in: query
           name: limit
           schema: { type: integer, default: 10 }
+          description: Page size
       responses:
         "200":
-          description: Teachers list
+          description: Paginated list of teacher profiles (public-safe view)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaginatedResponse"
+                $ref: "#/components/schemas/PaginatedTeacherProfilePublicResponse"
 
   /teacher-profiles/me/recommended-jobs:
     get:
       tags: [Jobs]
-      summary: Get recommended jobs for teacher
+      summary: Get recommended jobs for the authenticated teacher
+      description: Returns recommended jobs based on profile; uses services/jobRecommendationService. Accepts optional limit.
       security:
         - bearerAuth: []
       parameters:
         - in: query
           name: limit
           schema: { type: integer, default: 5 }
+          description: Maximum number of job results (1-20)
       responses:
         "200":
-          description: Recommended jobs retrieved
+          description: List of recommended jobs
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/JobsResponse"
 
-  # ===== Teacher Employment =====
+  #################################################################
+  # Employment (per-section endpoints under teacher-profiles/me/)
+  #################################################################
   /teacher-profiles/me/employment:
+    get:
+      tags: [Employment]
+      summary: List employment history for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of employment records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmploymentListResponse"
     post:
       tags: [Employment]
-      summary: Add employment record for teacher
+      summary: Add an employment record for the authenticated teacher
       security:
         - bearerAuth: []
       requestBody:
+        description: Employment item to add
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Employment"
+              $ref: "#/components/schemas/EmploymentInput"
+            example:
+              jobTitle: "Mathematics Teacher"
+              employer: "Lincoln High School"
+              location: "Boston, MA"
+              startDate: "2019-09-01"
+              endDate: null
+              isCurrent: true
+              responsibilities:
+                - "Teach Algebra I and II to 9th and 10th grade students"
+                - "Design assessments aligned to standards"
+              contactPerson:
+                name: "Dr. Maria Rodriguez"
+                position: "Principal"
+                email: "mrodriguez@lincolnhs.edu"
       responses:
-        "200":
-          description: Employment added successfully
+        "201":
+          description: Employment created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/EmploymentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /teacher-profiles/me/employment/{employmentId}:
     put:
       tags: [Employment]
-      summary: Update employment record for teacher
+      summary: Update a specific employment record
       security:
         - bearerAuth: []
       parameters:
@@ -587,1442 +252,61 @@ paths:
           name: employmentId
           required: true
           schema: { type: string }
+          description: Employment document _id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Employment"
-      responses:
-        "200":
-          description: Employment updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Employment]
-      summary: Delete employment record for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: employmentId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Employment deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Teacher Education =====
-  /teacher-profiles/me/education:
-    post:
-      tags: [Education]
-      summary: Add education record for teacher
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Education"
-      responses:
-        "200":
-          description: Education added successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /teacher-profiles/me/education/{educationId}:
-    put:
-      tags: [Education]
-      summary: Update education record for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: educationId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Education"
-      responses:
-        "200":
-          description: Education updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Education]
-      summary: Delete education record for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: educationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Education deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Teacher Qualifications =====
-  /teacher-profiles/me/qualifications:
-    post:
-      tags: [Qualifications]
-      summary: Add qualification for teacher
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Qualification"
-      responses:
-        "200":
-          description: Qualification added successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /teacher-profiles/me/qualifications/{qualificationId}:
-    put:
-      tags: [Qualifications]
-      summary: Update qualification for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: qualificationId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Qualification"
-      responses:
-        "200":
-          description: Qualification updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Qualifications]
-      summary: Delete qualification for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: qualificationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Qualification deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Teacher Referees =====
-  /teacher-profiles/me/referees:
-    post:
-      tags: [Referees]
-      summary: Add referee for teacher
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Referee"
-      responses:
-        "200":
-          description: Referee added successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /teacher-profiles/me/referees/{refereeId}:
-    put:
-      tags: [Referees]
-      summary: Update referee for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: refereeId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Referee"
-      responses:
-        "200":
-          description: Referee updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Referees]
-      summary: Delete referee for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: refereeId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Referee deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Jobs =====
-  /jobs:
-    post:
-      tags: [Jobs]
-      summary: Create a new job (School only)
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateJobRequest"
-      responses:
-        "201":
-          description: Job created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/search:
-    get:
-      tags: [Jobs]
-      summary: Search jobs with filters
-      parameters:
-        - in: query
-          name: title
-          schema: { type: string }
-        - in: query
-          name: location
-          schema: { type: string }
-        - in: query
-          name: category
-          schema: { type: string }
-        - in: query
-          name: type
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Jobs list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/featured:
-    get:
-      tags: [Jobs]
-      summary: Get featured jobs
-      parameters:
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Featured jobs retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/urgent:
-    get:
-      tags: [Jobs]
-      summary: Get urgent jobs
-      parameters:
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Urgent jobs retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/category/{category}:
-    get:
-      tags: [Jobs]
-      summary: Get jobs by category
-      parameters:
-        - in: path
-          name: category
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Jobs by category
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/location/{country}/{city}:
-    get:
-      tags: [Jobs]
-      summary: Get jobs by location
-      parameters:
-        - in: path
-          name: country
-          required: true
-          schema: { type: string }
-        - in: path
-          name: city
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Jobs by location
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/recommendations:
-    get:
-      tags: [Jobs]
-      summary: Get job recommendations for teacher
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Job recommendations retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}:
-    get:
-      tags: [Jobs]
-      summary: Get job by ID
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    put:
-      tags: [Jobs]
-      summary: Update job (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateJobRequest"
-      responses:
-        "200":
-          description: Job updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Jobs]
-      summary: Delete job (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/status:
-    patch:
-      tags: [Jobs]
-      summary: Update job status (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateJobStatusRequest"
-      responses:
-        "200":
-          description: Job status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/flags:
-    patch:
-      tags: [Jobs]
-      summary: Update job flags (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateJobFlagsRequest"
-      responses:
-        "200":
-          description: Job flags updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/school/{schoolId}:
-    get:
-      tags: [Jobs]
-      summary: Get jobs by school (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: schoolId
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: School jobs retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/{jobId}/analytics:
-    get:
-      tags: [Jobs]
-      summary: Get job analytics (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job analytics retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/export:
-    get:
-      tags: [Jobs]
-      summary: Export job data (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job data exported
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/dashboard/school/{schoolId}:
-    get:
-      tags: [Jobs]
-      summary: Get school dashboard stats (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: schoolId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Dashboard stats retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/dashboard/stats:
-    get:
-      tags: [Jobs]
-      summary: Get job statistics (School only)
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Job statistics retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/bulk/status:
-    patch:
-      tags: [Jobs]
-      summary: Bulk update job statuses (School only)
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/BulkUpdateJobStatusRequest"
-      responses:
-        "200":
-          description: Job statuses updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Applications =====
-  /jobs/{jobId}/apply:
-    post:
-      tags: [Applications]
-      summary: Submit job application (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateApplicationRequest"
-      responses:
-        "201":
-          description: Application submitted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/stats:
-    get:
-      tags: [Applications]
-      summary: Get application statistics
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Application stats retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/recent:
-    get:
-      tags: [Applications]
-      summary: Get recent applications
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Recent applications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/overdue:
-    get:
-      tags: [Applications]
-      summary: Get overdue applications (School only)
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Overdue applications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/bulk/status:
-    patch:
-      tags: [Applications]
-      summary: Bulk update application statuses (School only)
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/BulkUpdateApplicationStatusRequest"
-      responses:
-        "200":
-          description: Application statuses updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/applications:
-    get:
-      tags: [Applications]
-      summary: Get job applications (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-        - in: query
-          name: status
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job applications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/applications/{applicationId}:
-    get:
-      tags: [Applications]
-      summary: Get application by ID
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/status:
-    patch:
-      tags: [Applications]
-      summary: Update application status (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateApplicationStatusRequest"
-      responses:
-        "200":
-          description: Application status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/withdraw:
-    post:
-      tags: [Applications]
-      summary: Withdraw application (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application withdrawn
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/teacher/{teacherId}:
-    get:
-      tags: [Applications]
-      summary: Get applications by teacher (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: teacherId
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Teacher applications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedResponse"
-
-  /jobs/applications/{applicationId}/interview:
-    post:
-      tags: [Applications]
-      summary: Schedule interview (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ScheduleInterviewRequest"
-      responses:
-        "200":
-          description: Interview scheduled
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/accept:
-    post:
-      tags: [Applications]
-      summary: Accept application (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application accepted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/reject:
-    post:
-      tags: [Applications]
-      summary: Reject application (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RejectApplicationRequest"
-      responses:
-        "200":
-          description: Application rejected
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/shortlist:
-    post:
-      tags: [Applications]
-      summary: Shortlist application (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application shortlisted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/reviewing:
-    post:
-      tags: [Applications]
-      summary: Move application to reviewing (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application moved to reviewing
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{applicationId}/timeline:
-    get:
-      tags: [Applications]
-      summary: Get application timeline
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: applicationId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Application timeline retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/applications/{jobId}/export:
-    get:
-      tags: [Applications]
-      summary: Export applications (School only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Applications exported
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Saved Jobs =====
-  /jobs/saved:
-    get:
-      tags: [SavedJobs]
-      summary: Get saved jobs (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Saved jobs retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/saved/stats:
-    get:
-      tags: [SavedJobs]
-      summary: Get saved job statistics (Teacher only)
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Saved job stats retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/saved/{savedJobId}:
-    get:
-      tags: [SavedJobs]
-      summary: Get saved job by ID (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: savedJobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Saved job retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    put:
-      tags: [SavedJobs]
-      summary: Update saved job (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: savedJobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateSavedJobRequest"
-      responses:
-        "200":
-          description: Saved job updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [SavedJobs]
-      summary: Remove saved job (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: savedJobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Saved job removed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/save:
-    post:
-      tags: [SavedJobs]
-      summary: Save job (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SaveJobRequest"
-      responses:
-        "200":
-          description: Job saved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /jobs/{jobId}/saved:
-    get:
-      tags: [SavedJobs]
-      summary: Check if job is saved (Teacher only)
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Job saved status checked
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Uploads =====
-  /upload/avatar:
-    post:
-      tags: [Uploads]
-      summary: Upload user avatar
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                avatar:
-                  type: string
-                  format: binary
-      responses:
-        "200":
-          description: Avatar uploaded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /upload/document:
-    post:
-      tags: [Uploads]
-      summary: Upload document
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                document:
-                  type: string
-                  format: binary
-      responses:
-        "200":
-          description: Document uploaded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /upload/{publicId}:
-    delete:
-      tags: [Uploads]
-      summary: Delete file from Cloudinary
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: publicId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: File deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /upload/preset:
-    get:
-      tags: [Uploads]
-      summary: Get upload preset for client-side uploads
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Upload preset retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Notifications =====
-  /notifications:
-    get:
-      tags: [Notifications]
-      summary: Get user's notifications with pagination and filtering
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: limit
-          schema: { type: integer, default: 20 }
-        - in: query
-          name: isRead
-          schema: { type: boolean }
-        - in: query
-          name: type
-          schema: { type: string }
-        - in: query
-          name: category
-          schema: { type: string }
-        - in: query
-          name: priority
-          schema: { type: string }
-        - in: query
-          name: jobId
-          schema: { type: string }
-        - in: query
-          name: sortBy
-          schema: { type: string, default: "createdAt" }
-        - in: query
-          name: sortOrder
-          schema: { type: string, default: "desc" }
-      responses:
-        "200":
-          description: Notifications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Notifications]
-      summary: Delete multiple notifications
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeleteNotificationsRequest"
-      responses:
-        "200":
-          description: Notifications deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/stats:
-    get:
-      tags: [Notifications]
-      summary: Get user's notification statistics
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Notification stats retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/unread/count:
-    get:
-      tags: [Notifications]
-      summary: Get count of unread notifications
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Unread count retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/urgent:
-    get:
-      tags: [Notifications]
-      summary: Get urgent notifications for user
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Urgent notifications retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/read-all:
-    put:
-      tags: [Notifications]
-      summary: Mark all user's notifications as read
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: All notifications marked as read
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/{id}:
-    get:
-      tags: [Notifications]
-      summary: Get a specific notification by ID
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Notification retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    put:
-      tags: [Notifications]
-      summary: Mark a notification as read
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Notification marked as read
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-    delete:
-      tags: [Notifications]
-      summary: Delete a specific notification
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Notification deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/{id}/read:
-    put:
-      tags: [Notifications]
-      summary: Mark a notification as read
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Notification marked as read
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  /notifications/{id}/unread:
-    put:
-      tags: [Notifications]
-      summary: Mark a notification as unread
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Notification marked as unread
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiResponse"
-
-  # ===== Employment =====
-  /employment:
-    post:
-      tags: [Employment]
-      summary: Add employment record
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Employment"
-      responses:
-        "200":
-          description: Employment added
-  /employment/{id}:
-    put:
-      tags: [Employment]
-      summary: Update employment record
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Employment"
+              $ref: "#/components/schemas/EmploymentInput"
       responses:
         "200":
           description: Employment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmploymentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags: [Employment]
-      summary: Delete employment record
+      summary: Delete a specific employment record
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: employmentId
           required: true
           schema: { type: string }
       responses:
         "200":
           description: Employment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  # ===== Education =====
-  /education:
+  #################################################################
+  # Education
+  #################################################################
+  /teacher-profiles/me/education:
+    get:
+      tags: [Education]
+      summary: List education records for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of education records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EducationListResponse"
     post:
       tags: [Education]
-      summary: Add education record
+      summary: Add an education record
       security:
         - bearerAuth: []
       requestBody:
@@ -2030,19 +314,35 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Education"
+              $ref: "#/components/schemas/EducationInput"
+            example:
+              educationType: "University"
+              degree: "Master of Education"
+              institution: "Harvard University"
+              fieldOfStudy: "Mathematics Education"
+              gpa: "3.8/4.0"
+              startDate: "2016-09-01"
+              endDate: "2018-06-01"
+              thesisTitle: "Impact of Technology on Math Education"
+              honorsAwards:
+                - "Magna Cum Laude"
       responses:
-        "200":
-          description: Education added
-  /education/{id}:
+        "201":
+          description: Education created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EducationResponse"
+
+  /teacher-profiles/me/education/{educationId}:
     put:
       tags: [Education]
-      summary: Update education record
+      summary: Update a specific education record
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: educationId
           required: true
           schema: { type: string }
       requestBody:
@@ -2050,29 +350,53 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Education"
+              $ref: "#/components/schemas/EducationInput"
       responses:
         "200":
           description: Education updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EducationResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags: [Education]
-      summary: Delete education record
+      summary: Delete a specific education record
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: educationId
           required: true
           schema: { type: string }
       responses:
         "200":
           description: Education deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
 
-  # ===== Qualifications =====
-  /qualifications:
+  #################################################################
+  # Qualifications (legacy / general)
+  #################################################################
+  /teacher-profiles/me/qualifications:
+    get:
+      tags: [Qualifications]
+      summary: List qualifications for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of qualifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualificationListResponse"
     post:
       tags: [Qualifications]
-      summary: Add qualification
+      summary: Add a qualification
       security:
         - bearerAuth: []
       requestBody:
@@ -2080,19 +404,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Qualification"
+              $ref: "#/components/schemas/QualificationInput"
+            example:
+              title: "Teaching License"
+              issuingInstitution: "Department of Education"
+              subjectArea: "Mathematics"
+              certificationId: "TL-123456"
+              issueDate: "2019-06-15"
+              expiryDate: "2029-06-15"
+              ageRanges: ["6-11", "12-16"]
+              description: "National teaching license"
       responses:
-        "200":
-          description: Qualification added
-  /qualifications/{id}:
+        "201":
+          description: Qualification created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualificationResponse"
+
+  /teacher-profiles/me/qualifications/{qualificationId}:
     put:
       tags: [Qualifications]
-      summary: Update qualification
+      summary: Update a specific qualification
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: qualificationId
           required: true
           schema: { type: string }
       requestBody:
@@ -2100,29 +438,45 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Qualification"
+              $ref: "#/components/schemas/QualificationInput"
       responses:
         "200":
           description: Qualification updated
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags: [Qualifications]
-      summary: Delete qualification
+      summary: Delete a specific qualification
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: qualificationId
           required: true
           schema: { type: string }
       responses:
         "200":
           description: Qualification deleted
 
-  # ===== Referees =====
-  /referees:
+  #################################################################
+  # Referees
+  #################################################################
+  /teacher-profiles/me/referees:
+    get:
+      tags: [Referees]
+      summary: List referees for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of referees
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefereeListResponse"
     post:
       tags: [Referees]
-      summary: Add referee
+      summary: Add a referee
       security:
         - bearerAuth: []
       requestBody:
@@ -2130,19 +484,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Referee"
+              $ref: "#/components/schemas/RefereeInput"
+            example:
+              fullName: "Dr. John Smith"
+              position: "Principal"
+              organization: "Lincoln High School"
+              email: "john.smith@school.edu"
+              phone: "+1-555-987-6543"
+              relationship: "Former Supervisor"
+              yearsKnown: 5
+              notes: "Can vouch for teaching and leadership skills"
       responses:
-        "200":
-          description: Referee added
-  /referees/{id}:
+        "201":
+          description: Referee created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefereeResponse"
+
+  /teacher-profiles/me/referees/{refereeId}:
     put:
       tags: [Referees]
-      summary: Update referee
+      summary: Update a referee record
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: refereeId
           required: true
           schema: { type: string }
       requestBody:
@@ -2150,24 +518,350 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Referee"
+              $ref: "#/components/schemas/RefereeInput"
       responses:
         "200":
           description: Referee updated
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags: [Referees]
-      summary: Delete referee
+      summary: Delete a referee
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: refereeId
           required: true
           schema: { type: string }
       responses:
         "200":
           description: Referee deleted
 
+  #################################################################
+  # Certifications (new)
+  #################################################################
+  /teacher-profiles/me/certifications:
+    get:
+      tags: [Certifications]
+      summary: List professional certifications for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of certifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificationListResponse"
+    post:
+      tags: [Certifications]
+      summary: Add a professional certification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificationInput"
+            example:
+              certificationName: "Certified Teacher"
+              issuingOrganization: "National Board for Teaching"
+              issueDate: "2021-03-15"
+              expiryDate: "2026-03-15"
+              credentialId: "CT-2021-0001"
+              credentialUrl: "https://verify.credential.org/CT-2021-0001"
+              description: "National board certification"
+      responses:
+        "201":
+          description: Certification added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificationResponse"
+
+  /teacher-profiles/me/certifications/{id}:
+    put:
+      tags: [Certifications]
+      summary: Update a certification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificationInput"
+      responses:
+        "200":
+          description: Certification updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Certifications]
+      summary: Delete a certification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Certification deleted
+
+  #################################################################
+  # Professional Development
+  #################################################################
+  /teacher-profiles/me/development:
+    get:
+      tags: [Development]
+      summary: List professional development activities for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of development records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevelopmentListResponse"
+    post:
+      tags: [Development]
+      summary: Add a professional development record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevelopmentInput"
+            example:
+              title: "Advanced Mathematics Pedagogy"
+              provider: "Harvard Graduate School of Education"
+              type: "Course"
+              duration: "40 hours"
+              completionDate: "2023-06-30"
+              certificateUrl: "https://certificates.harvard.edu/abc"
+              skillsGained:
+                ["Differentiated Instruction", "Assessment Strategies"]
+              impact: "Improved differentiated instruction in mixed-ability classes."
+      responses:
+        "201":
+          description: Development record created
+
+  /teacher-profiles/me/development/{id}:
+    put:
+      tags: [Development]
+      summary: Update a development record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevelopmentInput"
+      responses:
+        "200":
+          description: Development record updated
+    delete:
+      tags: [Development]
+      summary: Delete a development record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Development record deleted
+
+  #################################################################
+  # Memberships
+  #################################################################
+  /teacher-profiles/me/memberships:
+    get:
+      tags: [Memberships]
+      summary: List professional memberships for authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of memberships
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipListResponse"
+    post:
+      tags: [Memberships]
+      summary: Add a membership
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipInput"
+            example:
+              organizationName: "National Education Association"
+              membershipType: "Full Member"
+              status: "Active"
+              membershipId: "NEA-2023-456789"
+              joinDate: "2020-01-10"
+              expiryDate: "2025-01-09"
+              benefits: ["Professional Development", "Networking"]
+              description: "National teacher association membership."
+      responses:
+        "201":
+          description: Membership created
+
+  /teacher-profiles/me/memberships/{id}:
+    put:
+      tags: [Memberships]
+      summary: Update a membership
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipInput"
+      responses:
+        "200":
+          description: Membership updated
+    delete:
+      tags: [Memberships]
+      summary: Delete a membership
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Membership deleted
+    # ===== Dependents =====
+  /teacher-additional/dependents:
+    post:
+      tags: [Dependents]
+      summary: Add dependent
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Dependent" }
+      responses:
+        "200": { description: Dependent added }
+    get:
+      tags: [Dependents]
+      summary: Get all dependents
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: List of dependents }
+
+  /teacher-additional/dependents/{id}:
+    put:
+      tags: [Dependents]
+      summary: Update dependent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Dependent" }
+      responses:
+        "200": { description: Dependent updated }
+    delete:
+      tags: [Dependents]
+      summary: Delete dependent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Dependent deleted }
+
+  # ===== Activities =====
+  /teacher-additional/activities:
+    post:
+      tags: [Activities]
+      summary: Add extracurricular activity
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Activity" }
+      responses:
+        "200": { description: Activity added }
+    get:
+      tags: [Activities]
+      summary: Get all activities
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: List of activities }
+
+  /teacher-additional/activities/{id}:
+    put:
+      tags: [Activities]
+      summary: Update activity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Activity" }
+      responses:
+        "200": { description: Activity updated }
+    delete:
+      tags: [Activities]
+      summary: Delete activity
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Activity deleted }
 components:
   securitySchemes:
     bearerAuth:
@@ -2175,45 +869,130 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    teacherId:
+      name: teacherId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The user's id (ObjectId string)
+
+  responses:
+    BadRequest:
+      description: Bad request - validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
   schemas:
+    ### Generic responses ###
     ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          description: Response payload (type varies by endpoint)
+
+    DeleteResponse:
       type: object
       properties:
         success: { type: boolean }
         message: { type: string }
-        data: {}
+        data:
+          type: string
+          description: id of deleted resource
 
-    PaginatedResponse:
+    ErrorResponse:
       type: object
       properties:
-        data:
-          type: array
-          items: {}
-        pagination:
-          type: object
-          properties:
-            page: { type: integer }
-            limit: { type: integer }
-            total: { type: integer }
-            pages: { type: integer }
+        success: { type: boolean, example: false }
+        message: { type: string }
+        stack:
+          type: string
+          description: stack trace included only in development
 
+    ### Teacher profile schemas ###
     TeacherProfileRequest:
       type: object
-      required:
-        [
-          fullName,
-          phoneNumber,
-          country,
-          city,
-          province,
-          zipCode,
-          address,
-          qualification,
-          subject,
-          yearsOfTeachingExperience,
-          professionalBio,
-        ]
+      description: Core profile fields (single-value). Use section endpoints to add arrays (employment, education, etc.)
       properties:
+        fullName:
+          type: string
+          description: Teacher's full name (required)
+        phoneNumber:
+          type: string
+          description: International phone format including country code (e.g., +1234567890)
+        country:
+          type: string
+        city:
+          type: string
+        province:
+          type: string
+        zipCode:
+          type: string
+        address:
+          type: string
+          description: Postal/street address (stored in profile but hidden on public view)
+        qualification:
+          type: string
+          enum: ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"]
+          description: Highest / main qualification
+        subject:
+          type: string
+        pgce:
+          type: boolean
+          description: Whether teacher holds PGCE (or similar teaching certificate)
+        yearsOfTeachingExperience:
+          type: integer
+          description: Number of years teaching
+        professionalBio:
+          type: string
+          description: Short professional biography
+        keyAchievements:
+          type: array
+          items: { type: string }
+      required:
+        - fullName
+        - phoneNumber
+        - country
+        - city
+        - qualification
+        - subject
+        - yearsOfTeachingExperience
+        - professionalBio
+
+    UserSummary:
+      type: object
+      properties:
+        _id: { type: string }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string }
+        avatarUrl: { type: string }
+
+    TeacherProfile:
+      type: object
+      properties:
+        _id: { type: string }
+        userId: { type: string }
         fullName: { type: string }
         phoneNumber: { type: string }
         country: { type: string }
@@ -2221,23 +1000,151 @@ components:
         province: { type: string }
         zipCode: { type: string }
         address: { type: string }
-        qualification:
-          {
-            type: string,
-            enum:
-              ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"],
-          }
+        qualification: { type: string }
         subject: { type: string }
         pgce: { type: boolean }
         yearsOfTeachingExperience: { type: integer }
         professionalBio: { type: string }
-        keyAchievements: { type: array, items: { type: string } }
-        certifications: { type: array, items: { type: string } }
-        additionalQualifications: { type: array, items: { type: string } }
+        keyAchievements:
+          type: array
+          items: { type: string }
+        profileCompletion:
+          type: integer
+          description: Percentage 0-100
+        isProfileComplete:
+          type: boolean
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        user:
+          $ref: "#/components/schemas/UserSummary"
+        # these are included in aggregated responses:
+        employment:
+          type: array
+          items:
+            $ref: "#/components/schemas/Employment"
+        education:
+          type: array
+          items:
+            $ref: "#/components/schemas/Education"
+        qualifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Qualification"
+        referees:
+          type: array
+          items:
+            $ref: "#/components/schemas/Referee"
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
+        development:
+          type: array
+          items:
+            $ref: "#/components/schemas/Development"
+        memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
 
-    Employment:
+    TeacherProfileResponse:
       type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/TeacherProfile"
+
+    TeacherProfilePublicResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          description: Public-safe teacher profile (sensitive fields omitted)
+          properties:
+            _id: { type: string }
+            fullName: { type: string }
+            country: { type: string }
+            city: { type: string }
+            subject: { type: string }
+            qualification: { type: string }
+            yearsOfTeachingExperience: { type: integer }
+            professionalBio: { type: string }
+            employment:
+              type: array
+              items:
+                $ref: "#/components/schemas/EmploymentPublic"
+
+    PaginatedTeacherProfilePublicResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/TeacherProfilePublicResponse"
+            pagination:
+              type: object
+              properties:
+                page: { type: integer }
+                limit: { type: integer }
+                total: { type: integer }
+                pages: { type: integer }
+
+    #################################################################
+    # Employment schemas
+    #################################################################
+    EmploymentInput:
+      type: object
+      description: Employment record to create/update. `startDate` is required.
       required: [jobTitle, employer, startDate]
+      properties:
+        jobTitle:
+          { type: string, description: "Job title (e.g., Mathematics Teacher)" }
+        employer: { type: string, description: "Employer / School name" }
+        location:
+          { type: string, description: "City, State or country (free text)" }
+        startDate:
+          { type: string, format: date, description: "Start date (YYYY-MM-DD)" }
+        endDate:
+          {
+            type: string,
+            format: date,
+            nullable: true,
+            description: "End date or null if current",
+          }
+        isCurrent:
+          {
+            type: boolean,
+            description: "Set true if this is the current position",
+          }
+        responsibilities:
+          type: array
+          items: { type: string }
+          description: "List of responsibilities / bullet points"
+        contactPerson:
+          type: object
+          properties:
+            name: { type: string }
+            position: { type: string }
+            email: { type: string, format: email }
+    Employment:
+      allOf:
+        - $ref: "#/components/schemas/EmploymentInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    EmploymentPublic:
+      type: object
       properties:
         jobTitle: { type: string }
         employer: { type: string }
@@ -2245,15 +1152,29 @@ components:
         startDate: { type: string, format: date }
         endDate: { type: string, format: date }
         isCurrent: { type: boolean }
-        responsibilities: { type: array, items: { type: string } }
-        contactPerson:
-          type: object
-          properties:
-            name: { type: string }
-            position: { type: string }
-            email: { type: string }
 
-    Education:
+    EmploymentResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Employment"
+
+    EmploymentListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Employment"
+
+    #################################################################
+    # Education schemas
+    #################################################################
+    EducationInput:
       type: object
       required: [educationType, degree, institution, startDate]
       properties:
@@ -2265,9 +1186,39 @@ components:
         startDate: { type: string, format: date }
         endDate: { type: string, format: date }
         thesisTitle: { type: string }
-        honorsAwards: { type: array, items: { type: string } }
+        honorsAwards:
+          type: array
+          items: { type: string }
+    Education:
+      allOf:
+        - $ref: "#/components/schemas/EducationInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    EducationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Education"
+    EducationListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Education"
 
-    Qualification:
+    #################################################################
+    # Qualification schemas (legacy)
+    #################################################################
+    QualificationInput:
       type: object
       required: [title, issuingInstitution, issueDate]
       properties:
@@ -2277,280 +1228,287 @@ components:
         certificationId: { type: string }
         issueDate: { type: string, format: date }
         expiryDate: { type: string, format: date }
-        ageRanges: { type: array, items: { type: string } }
+        ageRanges:
+          type: array
+          items: { type: string }
         description: { type: string }
+    Qualification:
+      allOf:
+        - $ref: "#/components/schemas/QualificationInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    QualificationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Qualification"
+    QualificationListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Qualification"
 
-    Referee:
+    #################################################################
+    # Referee schemas
+    #################################################################
+    RefereeInput:
       type: object
       required: [fullName, email]
       properties:
         fullName: { type: string }
         position: { type: string }
         organization: { type: string }
-        email: { type: string }
+        email: { type: string, format: email }
         phone: { type: string }
         relationship: { type: string }
         yearsKnown: { type: integer }
         notes: { type: string }
-
-    # ===== Authentication Schemas =====
-    SignupRequest:
-      type: object
-      required: [email, password, role, firstName, lastName]
-      properties:
-        email: { type: string, format: email }
-        password: { type: string, minLength: 8 }
-        role: { type: string, enum: ["teacher", "school"] }
-        firstName: { type: string }
-        lastName: { type: string }
-
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email: { type: string, format: email }
-        password: { type: string }
-
-    LoginResponse:
+    Referee:
+      allOf:
+        - $ref: "#/components/schemas/RefereeInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    RefereeResponse:
       type: object
       properties:
         success: { type: boolean }
         message: { type: string }
         data:
-          type: object
+          $ref: "#/components/schemas/Referee"
+    RefereeListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Referee"
+
+    #################################################################
+    # Certifications schemas
+    #################################################################
+    CertificationInput:
+      type: object
+      required: [certificationName, issuingOrganization, issueDate]
+      properties:
+        certificationName:
+          type: string
+          description: Name of the certification (e.g., Certified Teacher)
+        issuingOrganization:
+          type: string
+          description: Issuing body (e.g., National Board)
+        issueDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        credentialId:
+          type: string
+        credentialUrl:
+          type: string
+          format: uri
+        description:
+          type: string
+    Certification:
+      allOf:
+        - $ref: "#/components/schemas/CertificationInput"
+        - type: object
           properties:
-            accessToken: { type: string }
-            refreshToken: { type: string }
-            user:
-              $ref: "#/components/schemas/User"
-
-    SendOTPRequest:
-      type: object
-      required: [email, purpose]
-      properties:
-        email: { type: string, format: email }
-        purpose: { type: string, enum: ["verification", "passwordReset"] }
-
-    VerifyOTPRequest:
-      type: object
-      required: [email, otp]
-      properties:
-        email: { type: string, format: email }
-        otp: { type: string }
-
-    PasswordResetRequest:
-      type: object
-      required: [email]
-      properties:
-        email: { type: string, format: email }
-
-    PasswordResetConfirmRequest:
-      type: object
-      required: [email, otp, newPassword]
-      properties:
-        email: { type: string, format: email }
-        otp: { type: string }
-        newPassword: { type: string, minLength: 8 }
-
-    RefreshRequest:
-      type: object
-      required: [refreshToken]
-      properties:
-        refreshToken: { type: string }
-
-    LogoutRequest:
-      type: object
-      required: [refreshToken]
-      properties:
-        refreshToken: { type: string }
-
-    # ===== User Schemas =====
-    CompleteProfileRequest:
-      type: object
-      required: [role]
-      properties:
-        role: { type: string, enum: ["teacher", "school"] }
-        profileData: {}
-
-    UpdateProfileRequest:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    CertificationResponse:
       type: object
       properties:
-        firstName: { type: string }
-        lastName: { type: string }
-        phoneNumber: { type: string }
-        country: { type: string }
-        city: { type: string }
-        bio: { type: string }
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Certification"
+    CertificationListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
 
-    User:
+    #################################################################
+    # Development schemas
+    #################################################################
+    DevelopmentInput:
+      type: object
+      required: [title, provider]
+      properties:
+        title: { type: string, description: "Course/Workshop title" }
+        provider: { type: string, description: "Providing institution" }
+        type:
+          type: string
+          enum: ["Course", "Workshop", "Seminar", "Training", "Other"]
+          default: "Course"
+        duration:
+          { type: string, description: "Duration text e.g., '40 hours'" }
+        completionDate: { type: string, format: date }
+        certificateUrl: { type: string, format: uri }
+        skillsGained:
+          type: array
+          items: { type: string }
+        impact:
+          { type: string, description: "How it impacted teaching practice" }
+    Development:
+      allOf:
+        - $ref: "#/components/schemas/DevelopmentInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DevelopmentListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Development"
+
+    #################################################################
+    # Membership schemas
+    #################################################################
+    MembershipInput:
+      type: object
+      required: [organizationName]
+      properties:
+        organizationName: { type: string }
+        membershipType: { type: string }
+        status:
+          type: string
+          enum: ["Active", "Expired", "Pending"]
+          default: "Active"
+        membershipId: { type: string }
+        joinDate: { type: string, format: date }
+        expiryDate: { type: string, format: date }
+        benefits:
+          type: array
+          items: { type: string }
+        description: { type: string }
+    Membership:
+      allOf:
+        - $ref: "#/components/schemas/MembershipInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    MembershipListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
+
+    #################################################################
+    # Jobs schema (recommended)
+    #################################################################
+    Job:
       type: object
       properties:
         _id: { type: string }
-        email: { type: string }
-        firstName: { type: string }
-        lastName: { type: string }
-        role: { type: string }
-        isEmailVerified: { type: boolean }
-        createdAt: { type: string, format: date-time }
-
-    # ===== School Profile Schemas =====
-    SchoolProfileRequest:
-      type: object
-      required: [schoolName, country, city, schoolType]
-      properties:
-        schoolName: { type: string }
-        country: { type: string }
-        city: { type: string }
-        province: { type: string }
-        zipCode: { type: string }
-        address: { type: string }
-        schoolType:
-          {
-            type: string,
-            enum:
-              [
-                "Primary",
-                "Secondary",
-                "Both",
-                "International",
-                "Private",
-                "Public",
-              ],
-          }
-        description: { type: string }
-        website: { type: string, format: uri }
-        phoneNumber: { type: string }
-        email: { type: string, format: email }
-        establishedYear: { type: integer }
-        studentCount: { type: integer }
-        teacherCount: { type: integer }
-
-    # ===== Job Schemas =====
-    CreateJobRequest:
-      type: object
-      required: [title, description, location, category, type]
-      properties:
         title: { type: string }
-        description: { type: string }
-        requirements: { type: string }
+        organization: { type: string }
         location: { type: string }
-        category: { type: string }
-        type:
+        publishedAt: { type: string, format: date-time }
+        applicationDeadline: { type: string, format: date-time }
+        salaryMin: { type: number }
+        salaryMax: { type: number }
+        currency: { type: string }
+        salaryDisclose: { type: boolean }
+        daysPosted:
+          { type: integer, description: "Days since published (computed)" }
+        salaryRange:
           {
             type: string,
-            enum:
-              ["Full-time", "Part-time", "Contract", "Temporary", "Internship"],
+            description: "Human readable salary range (computed)",
           }
-        salary: { type: string }
-        benefits: { type: array, items: { type: string } }
+        isExpired: { type: boolean }
+    JobsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+    Dependent:
+      type: object
+      required:
+        [
+          fullName,
+          relationship,
+          age,
+          nationality,
+          passportNumber,
+          passportExpiry,
+        ]
+      properties:
+        fullName: { type: string, example: "Jane Smith" }
+        relationship: { type: string, example: "Spouse" }
+        age: { type: integer, example: 25 }
+        nationality: { type: string, example: "American" }
+        passportNumber: { type: string, example: "123456789" }
+        passportExpiry: { type: string, format: date }
+        visaRequired: { type: boolean, example: false }
+        accommodationNeeds:
+          { type: string, example: "2-bedroom apartment near school" }
+        medicalNeeds: { type: string, example: "Diabetic, requires insulin" }
+        educationNeeds: { type: string, example: "Primary school, Grade 3" }
+        additionalNotes: { type: string, example: "Needs wheelchair access" }
+
+    Activity:
+      type: object
+      required: [activityName, activityType, role, startDate, description]
+      properties:
+        activityName: { type: string, example: "Drama Club" }
+        activityType: { type: string, example: "Club" }
+        role: { type: string, example: "President" }
+        organization: { type: string, example: "Community Center" }
         startDate: { type: string, format: date }
-        applicationDeadline: { type: string, format: date }
-        isUrgent: { type: boolean }
-        isFeatured: { type: boolean }
-
-    UpdateJobRequest:
-      type: object
-      properties:
-        title: { type: string }
-        description: { type: string }
-        requirements: { type: string }
-        location: { type: string }
-        category: { type: string }
-        type: { type: string }
-        salary: { type: string }
-        benefits: { type: array, items: { type: string } }
-        startDate: { type: string, format: date }
-        applicationDeadline: { type: string, format: date }
-        isUrgent: { type: boolean }
-        isFeatured: { type: boolean }
-
-    UpdateJobStatusRequest:
-      type: object
-      required: [status]
-      properties:
-        status: { type: string, enum: ["active", "paused", "closed", "draft"] }
-
-    UpdateJobFlagsRequest:
-      type: object
-      properties:
-        isUrgent: { type: boolean }
-        isFeatured: { type: boolean }
-
-    BulkUpdateJobStatusRequest:
-      type: object
-      required: [jobIds, status]
-      properties:
-        jobIds: { type: array, items: { type: string } }
-        status: { type: string }
-
-    # ===== Application Schemas =====
-    CreateApplicationRequest:
-      type: object
-      required: [coverLetter]
-      properties:
-        coverLetter: { type: string }
-        resume: { type: string }
-        additionalDocuments: { type: array, items: { type: string } }
-
-    UpdateApplicationStatusRequest:
-      type: object
-      required: [status]
-      properties:
-        status:
-          {
-            type: string,
-            enum:
-              [
-                "pending",
-                "reviewing",
-                "shortlisted",
-                "interviewed",
-                "accepted",
-                "rejected",
-                "withdrawn",
-              ],
-          }
-
-    BulkUpdateApplicationStatusRequest:
-      type: object
-      required: [applicationIds, status]
-      properties:
-        applicationIds: { type: array, items: { type: string } }
-        status: { type: string }
-
-    ScheduleInterviewRequest:
-      type: object
-      required: [interviewDate, interviewType]
-      properties:
-        interviewDate: { type: string, format: date-time }
-        interviewType: { type: string, enum: ["phone", "video", "in-person"] }
-        location: { type: string }
-        notes: { type: string }
-
-    RejectApplicationRequest:
-      type: object
-      required: [reason]
-      properties:
-        reason: { type: string }
-        feedback: { type: string }
-
-    # ===== Saved Job Schemas =====
-    SaveJobRequest:
-      type: object
-      properties:
-        notes: { type: string }
-        priority: { type: string, enum: ["low", "medium", "high"] }
-
-    UpdateSavedJobRequest:
-      type: object
-      properties:
-        notes: { type: string }
-        priority: { type: string, enum: ["low", "medium", "high"] }
-
-    # ===== Notification Schemas =====
-    DeleteNotificationsRequest:
-      type: object
-      properties:
-        ids: { type: array, items: { type: string } }
-        isRead: { type: boolean }
-        olderThan: { type: integer }
+        endDate: { type: string, format: date }
+        isCurrent: { type: boolean, example: true }
+        timeCommitment: { type: string, example: "5 hours/week" }
+        description:
+          { type: string, example: "Led weekly rehearsals and managed events" }
+        achievements:
+          type: array
+          items: { type: string }
+          example: ["Leadership Award", "Best Play Regional Competition"]
+        skillsDeveloped:
+          type: array
+          items: { type: string }
+          example: ["Leadership", "Public Speaking", "Teamwork"]
