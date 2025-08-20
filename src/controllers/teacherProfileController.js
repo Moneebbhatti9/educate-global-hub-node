@@ -240,9 +240,9 @@ const getTeacherProfileById = async (req, res) => {
       memberships,
     };
 
-    return successResponse(res, "Teacher profile retrieved successfully", {
-      data: publicProfile,
-    });
+    return successResponse(res,
+      publicProfile,
+      "Teacher profile retrieved successfully");
   } catch (error) {
     console.error("Error in getTeacherProfileById:", error);
     return errorResponse(res, "Failed to retrieve teacher profile", 500);
