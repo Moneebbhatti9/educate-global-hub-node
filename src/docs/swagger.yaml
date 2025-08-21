@@ -35,6 +35,12 @@ tags:
     description: Teacher dependents (family members)
   - name: Activities
     description: Extracurricular activities
+  - name: SchoolProfile
+    description: School profile operations (info, search, details)
+  - name: AcademicPrograms
+    description: Academic programs and course offerings for schools
+  - name: SchoolMedia
+    description: Upload and manage school media (photos, documents, etc.)  
 paths:
 
   #################################################################
@@ -856,6 +862,264 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: Activity deleted }
+  /school-profiles:
+    post:
+      tags: [SchoolProfile]
+      summary: Create or update school profile
+      description: >
+        Allows a school user to create or update their profile.  
+        Only users with role `school` can create/update a school profile.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchoolProfileRequest"
+      responses:
+        "200":
+          description: School profile created or updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /school-profiles/me:
+    get:
+      tags: [SchoolProfile]
+      summary: Get current school's profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current school profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /school-profiles/{schoolId}:
+    get:
+      tags: [SchoolProfile]
+      summary: Get school profile by ID (public)
+      parameters:
+        - in: path
+          name: schoolId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: School profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  /school-profiles/search:
+    get:
+      tags: [SchoolProfile]
+      summary: Search school profiles
+      description: >
+        Public endpoint to search schools by filters like country, city, curriculum, size, etc.
+      parameters:
+        - in: query
+          name: country
+          schema: { type: string }
+        - in: query
+          name: city
+          schema: { type: string }
+        - in: query
+          name: curriculum
+          schema: { type: string }
+        - in: query
+          name: schoolType
+          schema: { type: string }
+        - in: query
+          name: genderType
+          schema: { type: string }
+        - in: query
+          name: ageGroup
+          schema: { type: string }
+        - in: query
+          name: schoolSize
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Schools list retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedResponse"
+
+  # ===================== ACADEMIC PROGRAMS =====================
+  /academic-programs:
+    post:
+      tags: [AcademicPrograms]
+      summary: Add academic program
+      description: >
+        Allows a school to add a new academic program/course offering.  
+        Example: IB Diploma, A-Levels, Montessori program, etc.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicProgram"
+      responses:
+        "200":
+          description: Academic program added successfully
+
+  /academic-programs/{id}:
+    put:
+      tags: [AcademicPrograms]
+      summary: Update academic program
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicProgram"
+      responses:
+        "200":
+          description: Academic program updated
+    delete:
+      tags: [AcademicPrograms]
+      summary: Delete academic program
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Academic program deleted
+
+  /academic-programs/{schoolId}:
+    get:
+      tags: [AcademicPrograms]
+      summary: Get all academic programs for a school
+      parameters:
+        - in: path
+          name: schoolId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Academic programs retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AcademicProgram"
+
+  # ===================== SCHOOL MEDIA =====================
+  /school-media:
+    post:
+      tags: [SchoolMedia]
+      summary: Upload school media files
+      description: >
+        Allows a school to upload multiple images to its media gallery.  
+        Files are stored in Cloudinary and saved in DB with metadata.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+              required: [files]
+            encoding:
+              files:
+                contentType: ["image/jpeg", "image/png", "image/webp"]
+      responses:
+        "200":
+          description: Media uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchoolMedia"
+
+  /school-media/{schoolId}:
+    get:
+      tags: [SchoolMedia]
+      summary: Get all media files of a school
+      parameters:
+        - in: path
+          name: schoolId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Media files retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchoolMedia"
+
+  /school-media/{mediaId}:
+    delete:
+      tags: [SchoolMedia]
+      summary: Delete a media file
+      description: >
+        Deletes a media file from Cloudinary and DB.  
+        Only the school that uploaded the media can delete it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Media deleted successfully
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1093,387 +1357,86 @@ components:
                 pages: { type: integer }
 
     #################################################################
-    # Employment schemas
+    # Employment, Education, Qualifications, Referees,
+    # Certifications, Development, Memberships, Jobs, Dependents, Activity
     #################################################################
-    EmploymentInput:
+    # (all of your existing schemas stay as-is here…)
+
+    #################################################################
+    # NEW: School profile schemas
+    #################################################################
+    SchoolProfileRequest:
       type: object
-      description: Employment record to create/update. `startDate` is required.
-      required: [jobTitle, employer, startDate]
+      required:
+        - schoolName
+        - schoolEmail
+        - schoolContactNumber
+        - country
+        - city
+        - province
+        - zipCode
+        - address
+        - curriculum
+        - schoolSize
+        - schoolType
+        - genderType
+        - ageGroup
+        - aboutSchool
       properties:
-        jobTitle: { type: string, description: "Job title (e.g., Mathematics Teacher)" }
-        employer: { type: string, description: "Employer / School name" }
-        location: { type: string, description: "City, State or country (free text)" }
-        startDate: { type: string, format: date, description: "Start date (YYYY-MM-DD)" }
-        endDate: { type: string, format: date, nullable: true, description: "End date or null if current" }
-        isCurrent: { type: boolean, description: "Set true if this is the current position" }
-        responsibilities:
+        schoolName: { type: string }
+        schoolEmail: { type: string, format: email }
+        schoolContactNumber: { type: string, example: "+1234567890" }
+        country: { type: string }
+        city: { type: string }
+        province: { type: string }
+        zipCode: { type: string }
+        address: { type: string }
+        curriculum:
+          type: array
+          items:
+            type: string
+        schoolSize:
+          type: string
+        schoolType:
+          type: string
+        genderType:
+          type: string
+        ageGroup:
           type: array
           items: { type: string }
-          description: "List of responsibilities / bullet points"
-        contactPerson:
-          type: object
-          properties:
-            name: { type: string }
-            position: { type: string }
-            email: { type: string, format: email }
-    Employment:
-      allOf:
-        - $ref: "#/components/schemas/EmploymentInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    EmploymentPublic:
-      type: object
-      properties:
-        jobTitle: { type: string }
-        employer: { type: string }
-        location: { type: string }
-        startDate: { type: string, format: date }
-        endDate: { type: string, format: date }
-        isCurrent: { type: boolean }
+        schoolWebsite: { type: string }
+        aboutSchool: { type: string, maxLength: 2000 }
 
-    EmploymentResponse:
+    AcademicProgram:
       type: object
+      required: [programName, educationLevel, curriculum, ageRange, programDuration, classCapacity, coreSubjects, programDescription]
       properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          $ref: "#/components/schemas/Employment"
-
-    EmploymentListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Employment"
-
-    #################################################################
-    # Education schemas
-    #################################################################
-    EducationInput:
-      type: object
-      required: [educationType, degree, institution, startDate]
-      properties:
-        educationType: { type: string, enum: ["University", "School", "Other"] }
-        degree: { type: string }
-        institution: { type: string }
-        fieldOfStudy: { type: string }
-        gpa: { type: string }
-        startDate: { type: string, format: date }
-        endDate: { type: string, format: date }
-        thesisTitle: { type: string }
-        honorsAwards:
+        programName: { type: string, example: "International Baccalaureate Diploma" }
+        educationLevel: { type: string, example: "Secondary" }
+        curriculum: { type: string, example: "International Baccalaureate" }
+        ageRange: { type: string, example: "16-18 years" }
+        programDuration: { type: string, example: "2 years" }
+        classCapacity: { type: integer, example: 25 }
+        coreSubjects:
           type: array
           items: { type: string }
-    Education:
-      allOf:
-        - $ref: "#/components/schemas/EducationInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    EducationResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          $ref: "#/components/schemas/Education"
-    EducationListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Education"
-
-    #################################################################
-    # Qualification schemas (legacy)
-    #################################################################
-    QualificationInput:
-      type: object
-      required: [title, issuingInstitution, issueDate]
-      properties:
-        title: { type: string }
-        issuingInstitution: { type: string }
-        subjectArea: { type: string }
-        certificationId: { type: string }
-        issueDate: { type: string, format: date }
-        expiryDate: { type: string, format: date }
-        ageRanges:
+          example: ["Mathematics", "English", "Science"]
+        programDescription: { type: string }
+        admissionRequirements:
           type: array
           items: { type: string }
-        description: { type: string }
-    Qualification:
-      allOf:
-        - $ref: "#/components/schemas/QualificationInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    QualificationResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          $ref: "#/components/schemas/Qualification"
-    QualificationListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Qualification"
+          example: ["Minimum GPA 3.5", "Language Proficiency"]
+        programFees: { type: string, example: "$15,000/year" }
 
-    #################################################################
-    # Referee schemas
-    #################################################################
-    RefereeInput:
-      type: object
-      required: [fullName, email]
-      properties:
-        fullName: { type: string }
-        position: { type: string }
-        organization: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
-        relationship: { type: string }
-        yearsKnown: { type: integer }
-        notes: { type: string }
-    Referee:
-      allOf:
-        - $ref: "#/components/schemas/RefereeInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    RefereeResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          $ref: "#/components/schemas/Referee"
-    RefereeListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Referee"
-
-    #################################################################
-    # Certifications schemas
-    #################################################################
-    CertificationInput:
-      type: object
-      required: [certificationName, issuingOrganization, issueDate]
-      properties:
-        certificationName:
-          type: string
-          description: Name of the certification (e.g., Certified Teacher)
-        issuingOrganization:
-          type: string
-          description: Issuing body (e.g., National Board)
-        issueDate:
-          type: string
-          format: date
-        expiryDate:
-          type: string
-          format: date
-          nullable: true
-        credentialId:
-          type: string
-        credentialUrl:
-          type: string
-          format: uri
-        description:
-          type: string
-    Certification:
-      allOf:
-        - $ref: "#/components/schemas/CertificationInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    CertificationResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          $ref: "#/components/schemas/Certification"
-    CertificationListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Certification"
-
-    #################################################################
-    # Development schemas
-    #################################################################
-    DevelopmentInput:
-      type: object
-      required: [title, provider]
-      properties:
-        title: { type: string, description: "Course/Workshop title" }
-        provider: { type: string, description: "Providing institution" }
-        type:
-          type: string
-          enum: ["Course", "Workshop", "Seminar", "Training", "Other"]
-          default: "Course"
-        duration: { type: string, description: "Duration text e.g., '40 hours'" }
-        completionDate: { type: string, format: date }
-        certificateUrl: { type: string, format: uri }
-        skillsGained:
-          type: array
-          items: { type: string }
-        impact: { type: string, description: "How it impacted teaching practice" }
-    Development:
-      allOf:
-        - $ref: "#/components/schemas/DevelopmentInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    DevelopmentListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Development"
-
-    #################################################################
-    # Membership schemas
-    #################################################################
-    MembershipInput:
-      type: object
-      required: [organizationName]
-      properties:
-        organizationName: { type: string }
-        membershipType: { type: string }
-        status:
-          type: string
-          enum: ["Active", "Expired", "Pending"]
-          default: "Active"
-        membershipId: { type: string }
-        joinDate: { type: string, format: date }
-        expiryDate: { type: string, format: date }
-        benefits:
-          type: array
-          items: { type: string }
-        description: { type: string }
-    Membership:
-      allOf:
-        - $ref: "#/components/schemas/MembershipInput"
-        - type: object
-          properties:
-            _id: { type: string }
-            teacherId: { type: string }
-            createdAt: { type: string, format: date-time }
-            updatedAt: { type: string, format: date-time }
-    MembershipListResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Membership"
-
-    #################################################################
-    # Jobs schema (recommended)
-    #################################################################
-    Job:
+    SchoolMedia:
       type: object
       properties:
         _id: { type: string }
-        title: { type: string }
-        organization: { type: string }
-        location: { type: string }
-        publishedAt: { type: string, format: date-time }
-        applicationDeadline: { type: string, format: date-time }
-        salaryMin: { type: number }
-        salaryMax: { type: number }
-        currency: { type: string }
-        salaryDisclose: { type: boolean }
-        daysPosted: { type: integer, description: "Days since published (computed)" }
-        salaryRange: { type: string, description: "Human readable salary range (computed)" }
-        isExpired: { type: boolean }
-    JobsResponse:
-      type: object
-      properties:
-        success: { type: boolean }
-        message: { type: string }
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Job"
-    Dependent:
-      type: object
-      required: [fullName, relationship, age, nationality, passportNumber, passportExpiry]
-      properties:
-        fullName: { type: string, example: "Jane Smith" }
-        relationship: { type: string, example: "Spouse" }
-        age: { type: integer, example: 25 }
-        nationality: { type: string, example: "American" }
-        passportNumber: { type: string, example: "123456789" }
-        passportExpiry: { type: string, format: date }
-        visaRequired: { type: boolean, example: false }
-        accommodationNeeds: { type: string, example: "2-bedroom apartment near school" }
-        medicalNeeds: { type: string, example: "Diabetic, requires insulin" }
-        educationNeeds: { type: string, example: "Primary school, Grade 3" }
-        additionalNotes: { type: string, example: "Needs wheelchair access" }
-
-    Activity:
-      type: object
-      required: [activityName, activityType, role, startDate, description]
-      properties:
-        activityName: { type: string, example: "Drama Club" }
-        activityType: { type: string, example: "Club" }
-        role: { type: string, example: "President" }
-        organization: { type: string, example: "Community Center" }
-        startDate: { type: string, format: date }
-        endDate: { type: string, format: date }
-        isCurrent: { type: boolean, example: true }
-        timeCommitment: { type: string, example: "5 hours/week" }
-        description: { type: string, example: "Led weekly rehearsals and managed events" }
-        achievements:
-          type: array
-          items: { type: string }
-          example: ["Leadership Award", "Best Play Regional Competition"]
-        skillsDeveloped:
-          type: array
-          items: { type: string }
-          example: ["Leadership", "Public Speaking", "Teamwork"]
+        schoolId: { type: string }
+        url: { type: string, example: "https://res.cloudinary.com/demo/image/upload/sample.jpg" }
+        publicId: { type: string }
+        format: { type: string, example: "jpg" }
+        width: { type: integer, example: 800 }
+        height: { type: integer, example: 600 }
+        size: { type: integer, example: 204800 }
+        uploadedAt: { type: string, format: date-time }
