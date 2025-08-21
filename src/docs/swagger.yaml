@@ -13,6 +13,12 @@ servers:
     description: Production server (Railway)
 
 tags:
+  - name: Health
+    description: API health and status
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Users
+    description: User management operations
   - name: TeacherProfile
     description: Core teacher profile create/read/update and search
   - name: Employment
@@ -35,13 +41,431 @@ tags:
     description: Teacher dependents (family members)
   - name: Activities
     description: Extracurricular activities
-  - name: SchoolProfile
-    description: School profile operations (info, search, details)
-  - name: AcademicPrograms
-    description: Academic programs and course offerings for schools
-  - name: SchoolMedia
-    description: Upload and manage school media (photos, documents, etc.)  
+  - name: Jobs
+    description: Job management and applications
+  - name: Applications
+    description: Job application management
+  - name: SavedJobs
+    description: Teacher saved jobs management
+  - name: SchoolProfiles
+    description: School profile management
+  - name: Uploads
+    description: File upload management
+  - name: Notifications
+    description: User notification management
 paths:
+  #################################################################
+  # Health Check
+  #################################################################
+  /health:
+    get:
+      tags: [Health]
+      summary: API health check
+      description: Returns the current status of the API
+      responses:
+        "200":
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  timestamp: { type: string, format: date-time }
+                  environment: { type: string }
+
+  #################################################################
+  # Authentication
+  #################################################################
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: Creates a new user account with email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+            example:
+              firstName: "John"
+              lastName: "Doe"
+              email: "john.doe@example.com"
+              password: "SecurePassword123!"
+              role: "teacher"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user and get token
+      description: Login with email and password to receive access and refresh tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: "john.doe@example.com"
+              password: "SecurePassword123!"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/send-otp:
+    post:
+      tags: [Authentication]
+      summary: Send OTP for email verification or password reset
+      description: Sends a one-time password to the user's email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOTPRequest"
+            example:
+              email: "john.doe@example.com"
+              purpose: "email_verification"
+      responses:
+        "200":
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/verify-otp:
+    post:
+      tags: [Authentication]
+      summary: Verify OTP and mark email as verified
+      description: Verifies the OTP code and marks the user's email as verified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOTPRequest"
+            example:
+              email: "john.doe@example.com"
+              otp: "123456"
+              purpose: "email_verification"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPVerificationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/password-reset:
+    post:
+      tags: [Authentication]
+      summary: Send password reset email
+      description: Initiates password reset process by sending OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+            example:
+              email: "john.doe@example.com"
+      responses:
+        "200":
+          description: Password reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/password-reset-confirm:
+    post:
+      tags: [Authentication]
+      summary: Reset password with OTP
+      description: Confirms password reset using OTP and sets new password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+            example:
+              email: "john.doe@example.com"
+              otp: "123456"
+              newPassword: "NewSecurePassword123!"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetConfirmResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      description: Uses refresh token to get a new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+            example:
+              refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      description: Invalidates the refresh token and logs out the user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+            example:
+              refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Returns the authenticated user's information
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  #################################################################
+  # User Management
+  #################################################################
+  /users/complete-profile:
+    post:
+      tags: [Users]
+      summary: Complete user profile
+      description: Completes the user profile with additional information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteProfileRequest"
+      responses:
+        "200":
+          description: Profile completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      description: Returns the authenticated user's complete profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Users]
+      summary: Update user profile
+      description: Updates the authenticated user's profile information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get public user profile by ID
+      description: Returns public information about a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: User ID
+      responses:
+        "200":
+          description: Public user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUserProfileResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Get users list with filtering and pagination
+      description: Returns a paginated list of users with optional filtering
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+          description: Page size
+        - in: query
+          name: role
+          schema: { type: string }
+          description: Filter by user role
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Search by name or email
+      responses:
+        "200":
+          description: Paginated users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersListResponse"
+
+  /users/avatar:
+    put:
+      tags: [Users]
+      summary: Update user avatar
+      description: Updates the authenticated user's avatar image
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file
+      responses:
+        "200":
+          description: Avatar updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarUpdateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/account:
+    delete:
+      tags: [Users]
+      summary: Delete user account
+      description: Permanently deletes the authenticated user's account
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   #################################################################
   # Teacher profile (core)
@@ -189,6 +613,931 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JobsResponse"
+
+  #################################################################
+  # Jobs Management
+  #################################################################
+  /jobs:
+    post:
+      tags: [Jobs]
+      summary: Create a new job posting
+      description: Creates a new job posting (School only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/search:
+    get:
+      tags: [Jobs]
+      summary: Search jobs
+      description: Search jobs with various filters and pagination
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search query
+        - in: query
+          name: location
+          schema: { type: string }
+          description: Location filter
+        - in: query
+          name: category
+          schema: { type: string }
+          description: Job category
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+          description: Page size
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsSearchResponse"
+
+  /jobs/featured:
+    get:
+      tags: [Jobs]
+      summary: Get featured jobs
+      description: Returns featured job postings
+      responses:
+        "200":
+          description: Featured jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+
+  /jobs/urgent:
+    get:
+      tags: [Jobs]
+      summary: Get urgent jobs
+      description: Returns urgent job postings
+      responses:
+        "200":
+          description: Urgent jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+
+  /jobs/category/{category}:
+    get:
+      tags: [Jobs]
+      summary: Get jobs by category
+      description: Returns jobs filtered by category
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema: { type: string }
+          description: Job category
+      responses:
+        "200":
+          description: Jobs by category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+
+  /jobs/location/{country}/{city}:
+    get:
+      tags: [Jobs]
+      summary: Get jobs by location
+      description: Returns jobs filtered by country and city
+      parameters:
+        - in: path
+          name: country
+          required: true
+          schema: { type: string }
+          description: Country
+        - in: path
+          name: city
+          required: true
+          schema: { type: string }
+          description: City
+      responses:
+        "200":
+          description: Jobs by location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      summary: Get job by ID
+      description: Returns detailed job information
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Jobs]
+      summary: Update job
+      description: Updates an existing job posting (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobRequest"
+      responses:
+        "200":
+          description: Job updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Jobs]
+      summary: Delete job
+      description: Deletes a job posting (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Job deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/status:
+    patch:
+      tags: [Jobs]
+      summary: Update job status
+      description: Updates the status of a job posting (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobStatusRequest"
+      responses:
+        "200":
+          description: Job status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/flags:
+    patch:
+      tags: [Jobs]
+      summary: Update job flags
+      description: Updates flags for a job posting (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobFlagsRequest"
+      responses:
+        "200":
+          description: Job flags updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/school/{schoolId}:
+    get:
+      tags: [Jobs]
+      summary: Get jobs by school
+      description: Returns all jobs posted by a specific school
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: schoolId
+          required: true
+          schema: { type: string }
+          description: School ID
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+          description: Page size
+      responses:
+        "200":
+          description: School jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/bulk/status:
+    patch:
+      tags: [Jobs]
+      summary: Bulk update job statuses
+      description: Updates status for multiple jobs (School only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateJobStatusRequest"
+      responses:
+        "200":
+          description: Jobs updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkUpdateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/dashboard/school/{schoolId}:
+    get:
+      tags: [Jobs]
+      summary: Get school dashboard stats
+      description: Returns dashboard statistics for a school
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: schoolId
+          required: true
+          schema: { type: string }
+          description: School ID
+      responses:
+        "200":
+          description: School dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchoolDashboardResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/dashboard/stats:
+    get:
+      tags: [Jobs]
+      summary: Get job statistics
+      description: Returns overall job statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Job statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  #################################################################
+  # Job Applications
+  #################################################################
+  /jobs/{jobId}/apply:
+    post:
+      tags: [Applications]
+      summary: Apply for a job
+      description: Submits a job application (Teacher only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobApplicationRequest"
+      responses:
+        "201":
+          description: Application submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications:
+    get:
+      tags: [Applications]
+      summary: Get application statistics
+      description: Returns application statistics for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Application statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/applications/recent:
+    get:
+      tags: [Applications]
+      summary: Get recent applications
+      description: Returns recent applications for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Recent applications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/applications/overdue:
+    get:
+      tags: [Applications]
+      summary: Get overdue applications
+      description: Returns overdue applications (School only)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Overdue applications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/applications/bulk/status:
+    patch:
+      tags: [Applications]
+      summary: Bulk update application statuses
+      description: Updates status for multiple applications (School only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateApplicationStatusRequest"
+      responses:
+        "200":
+          description: Applications updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkUpdateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/{jobId}/applications:
+    get:
+      tags: [Applications]
+      summary: Get job applications
+      description: Returns applications for a specific job (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+          description: Page size
+      responses:
+        "200":
+          description: Job applications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}:
+    get:
+      tags: [Applications]
+      summary: Get application by ID
+      description: Returns detailed application information
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/status:
+    patch:
+      tags: [Applications]
+      summary: Update application status
+      description: Updates the status of an application (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApplicationStatusRequest"
+      responses:
+        "200":
+          description: Application status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/withdraw:
+    post:
+      tags: [Applications]
+      summary: Withdraw application
+      description: Withdraws a job application (Teacher only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application withdrawn successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/teacher/{teacherId}:
+    get:
+      tags: [Applications]
+      summary: Get applications by teacher
+      description: Returns applications submitted by a specific teacher (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teacherId
+          required: true
+          schema: { type: string }
+          description: Teacher ID
+      responses:
+        "200":
+          description: Teacher applications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+
+  /jobs/applications/{applicationId}/interview:
+    post:
+      tags: [Applications]
+      summary: Schedule interview
+      description: Schedules an interview for an application (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleInterviewRequest"
+      responses:
+        "200":
+          description: Interview scheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/accept:
+    post:
+      tags: [Applications]
+      summary: Accept application
+      description: Accepts a job application (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application accepted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/reject:
+    post:
+      tags: [Applications]
+      summary: Reject application
+      description: Rejects a job application (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/shortlist:
+    post:
+      tags: [Applications]
+      summary: Shortlist application
+      description: Shortlists a job application (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application shortlisted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/reviewing:
+    post:
+      tags: [Applications]
+      summary: Move application to reviewing
+      description: Moves an application to reviewing status (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application moved to reviewing successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{applicationId}/timeline:
+    get:
+      tags: [Applications]
+      summary: Get application timeline
+      description: Returns the timeline of an application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema: { type: string }
+          description: Application ID
+      responses:
+        "200":
+          description: Application timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationTimelineResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/applications/{jobId}/export:
+    get:
+      tags: [Applications]
+      summary: Export applications
+      description: Exports applications for a job to CSV/Excel (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Applications exported successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/analytics:
+    get:
+      tags: [Jobs]
+      summary: Get job analytics
+      description: Returns analytics for a specific job (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Job analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAnalyticsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/export:
+    get:
+      tags: [Jobs]
+      summary: Export job data
+      description: Exports job data to CSV/Excel (School only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Job data exported successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - School role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/recommendations:
+    get:
+      tags: [Jobs]
+      summary: Get job recommendations
+      description: Returns personalized job recommendations for the authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Job recommendations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
 
   #################################################################
   # Employment (per-section endpoints under teacher-profiles/me/)
@@ -652,7 +2001,8 @@ paths:
               duration: "40 hours"
               completionDate: "2023-06-30"
               certificateUrl: "https://certificates.harvard.edu/abc"
-              skillsGained: ["Differentiated Instruction", "Assessment Strategies"]
+              skillsGained:
+                ["Differentiated Instruction", "Assessment Strategies"]
               impact: "Improved differentiated instruction in mixed-ability classes."
       responses:
         "201":
@@ -765,7 +2115,7 @@ paths:
       responses:
         "200":
           description: Membership deleted
-   # ===== Dependents =====
+    # ===== Dependents =====
   /teacher-additional/dependents:
     post:
       tags: [Dependents]
@@ -862,13 +2212,201 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: Activity deleted }
+
+  #################################################################
+  # Saved Jobs Management
+  #################################################################
+  /jobs/saved:
+    get:
+      tags: [SavedJobs]
+      summary: Get saved jobs
+      description: Returns all saved jobs for the authenticated teacher
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Saved jobs list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedJobsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+
+  /jobs/saved/stats:
+    get:
+      tags: [SavedJobs]
+      summary: Get saved jobs statistics
+      description: Returns statistics about saved jobs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Saved jobs statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedJobsStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+
+  /jobs/saved/{savedJobId}:
+    get:
+      tags: [SavedJobs]
+      summary: Get saved job by ID
+      description: Returns a specific saved job
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: savedJobId
+          required: true
+          schema: { type: string }
+          description: Saved job ID
+      responses:
+        "200":
+          description: Saved job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedJobResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [SavedJobs]
+      summary: Update saved job
+      description: Updates a saved job (Teacher only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: savedJobId
+          required: true
+          schema: { type: string }
+          description: Saved job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSavedJobRequest"
+      responses:
+        "200":
+          description: Saved job updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SavedJobs]
+      summary: Remove saved job
+      description: Removes a job from saved list (Teacher only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: savedJobId
+          required: true
+          schema: { type: string }
+          description: Saved job ID
+      responses:
+        "200":
+          description: Saved job removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/save:
+    post:
+      tags: [SavedJobs]
+      summary: Save a job
+      description: Saves a job to the teacher's saved list
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveJobRequest"
+      responses:
+        "200":
+          description: Job saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{jobId}/saved:
+    get:
+      tags: [SavedJobs]
+      summary: Check if job is saved
+      description: Checks if a job is saved by the authenticated teacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+          description: Job ID
+      responses:
+        "200":
+          description: Job saved status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobSavedStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Forbidden - Teacher role required
+
+  #################################################################
+  # School Profile Management
+  #################################################################
   /school-profiles:
     post:
-      tags: [SchoolProfile]
+      tags: [SchoolProfiles]
       summary: Create or update school profile
-      description: >
-        Allows a school user to create or update their profile.  
-        Only users with role `school` can create/update a school profile.
+      description: Creates a new school profile or updates existing one
       security:
         - bearerAuth: []
       requestBody:
@@ -879,171 +2417,98 @@ paths:
               $ref: "#/components/schemas/SchoolProfileRequest"
       responses:
         "200":
-          description: School profile created or updated successfully
+          description: School profile created/updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/SchoolProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /school-profiles/me:
     get:
-      tags: [SchoolProfile]
-      summary: Get current school's profile
+      tags: [SchoolProfiles]
+      summary: Get current user's school profile
+      description: Returns the authenticated user's school profile
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: Current school profile retrieved
+          description: School profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/SchoolProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /school-profiles/{schoolId}:
     get:
-      tags: [SchoolProfile]
-      summary: Get school profile by ID (public)
+      tags: [SchoolProfiles]
+      summary: Get school profile by ID
+      description: Returns public school profile information
       parameters:
         - in: path
           name: schoolId
           required: true
           schema: { type: string }
+          description: School ID
       responses:
         "200":
-          description: School profile retrieved
+          description: School profile
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponse"
+                $ref: "#/components/schemas/SchoolProfilePublicResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /school-profiles/search:
     get:
-      tags: [SchoolProfile]
+      tags: [SchoolProfiles]
       summary: Search school profiles
-      description: >
-        Public endpoint to search schools by filters like country, city, curriculum, size, etc.
+      description: Search schools with various filters
       parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search query
         - in: query
           name: country
           schema: { type: string }
+          description: Country filter
         - in: query
           name: city
           schema: { type: string }
-        - in: query
-          name: curriculum
-          schema: { type: string }
-        - in: query
-          name: schoolType
-          schema: { type: string }
-        - in: query
-          name: genderType
-          schema: { type: string }
-        - in: query
-          name: ageGroup
-          schema: { type: string }
-        - in: query
-          name: schoolSize
-          schema: { type: string }
+          description: City filter
         - in: query
           name: page
           schema: { type: integer, default: 1 }
+          description: Page number
         - in: query
           name: limit
           schema: { type: integer, default: 10 }
+          description: Page size
       responses:
         "200":
-          description: Schools list retrieved
+          description: Search results
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaginatedResponse"
+                $ref: "#/components/schemas/SchoolProfilesSearchResponse"
 
-  # ===================== ACADEMIC PROGRAMS =====================
-  /academic-programs:
+  #################################################################
+  # File Upload Management
+  #################################################################
+  /upload/avatar:
     post:
-      tags: [AcademicPrograms]
-      summary: Add academic program
-      description: >
-        Allows a school to add a new academic program/course offering.  
-        Example: IB Diploma, A-Levels, Montessori program, etc.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AcademicProgram"
-      responses:
-        "200":
-          description: Academic program added successfully
-
-  /academic-programs/{id}:
-    put:
-      tags: [AcademicPrograms]
-      summary: Update academic program
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AcademicProgram"
-      responses:
-        "200":
-          description: Academic program updated
-    delete:
-      tags: [AcademicPrograms]
-      summary: Delete academic program
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Academic program deleted
-
-  /academic-programs/{schoolId}:
-    get:
-      tags: [AcademicPrograms]
-      summary: Get all academic programs for a school
-      parameters:
-        - in: path
-          name: schoolId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Academic programs retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  message: { type: string }
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AcademicProgram"
-
-  # ===================== SCHOOL MEDIA =====================
-  /school-media:
-    post:
-      tags: [SchoolMedia]
-      summary: Upload school media files
-      description: >
-        Allows a school to upload multiple images to its media gallery.  
-        Files are stored in Cloudinary and saved in DB with metadata.
+      tags: [Uploads]
+      summary: Upload user avatar
+      description: Uploads a user avatar image
       security:
         - bearerAuth: []
       requestBody:
@@ -1053,73 +2518,348 @@ paths:
             schema:
               type: object
               properties:
-                files:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
-              required: [files]
-            encoding:
-              files:
-                contentType: ["image/jpeg", "image/png", "image/webp"]
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file
       responses:
         "200":
-          description: Media uploaded successfully
+          description: Avatar uploaded successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  message: { type: string }
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/SchoolMedia"
+                $ref: "#/components/schemas/AvatarUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
-  /school-media/{schoolId}:
-    get:
-      tags: [SchoolMedia]
-      summary: Get all media files of a school
-      parameters:
-        - in: path
-          name: schoolId
-          required: true
-          schema: { type: string }
+  /upload/document:
+    post:
+      tags: [Uploads]
+      summary: Upload document
+      description: Uploads a document file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document:
+                  type: string
+                  format: binary
+                  description: Document file
       responses:
         "200":
-          description: Media files retrieved
+          description: Document uploaded successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  message: { type: string }
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/SchoolMedia"
+                $ref: "#/components/schemas/DocumentUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
-  /school-media/{mediaId}:
+  /upload/{publicId}:
     delete:
-      tags: [SchoolMedia]
-      summary: Delete a media file
-      description: >
-        Deletes a media file from Cloudinary and DB.  
-        Only the school that uploaded the media can delete it.
+      tags: [Uploads]
+      summary: Delete file
+      description: Deletes a file from Cloudinary
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: mediaId
+          name: publicId
           required: true
           schema: { type: string }
+          description: Cloudinary public ID
       responses:
         "200":
-          description: Media deleted successfully
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileDeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
+  /upload/preset:
+    get:
+      tags: [Uploads]
+      summary: Get upload preset
+      description: Returns upload preset for client-side uploads
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Upload preset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadPresetResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
+  #################################################################
+  # Notification Management
+  #################################################################
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Get user notifications
+      description: Returns user's notifications with pagination and filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+          description: Page number
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+          description: Page size
+        - in: query
+          name: isRead
+          schema: { type: boolean }
+          description: Filter by read status
+        - in: query
+          name: type
+          schema: { type: string }
+          description: Filter by notification type
+        - in: query
+          name: category
+          schema: { type: string }
+          description: Filter by category
+        - in: query
+          name: priority
+          schema: { type: string }
+          description: Filter by priority
+        - in: query
+          name: jobId
+          schema: { type: string }
+          description: Filter by job ID
+        - in: query
+          name: sortBy
+          schema: { type: string, default: "createdAt" }
+          description: Sort field
+        - in: query
+          name: sortOrder
+          schema: { type: string, default: "desc" }
+          description: Sort order
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/stats:
+    get:
+      tags: [Notifications]
+      summary: Get notification statistics
+      description: Returns user's notification statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notification statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/unread/count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notifications count
+      description: Returns count of unread notifications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/urgent:
+    get:
+      tags: [Notifications]
+      summary: Get urgent notifications
+      description: Returns urgent notifications for user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+          description: Maximum number of notifications
+      responses:
+        "200":
+          description: Urgent notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UrgentNotificationsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      description: Marks all user's notifications as read
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarkAllReadResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/{id}:
+    get:
+      tags: [Notifications]
+      summary: Get notification by ID
+      description: Returns a specific notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Notification ID
+      responses:
+        "200":
+          description: Notification details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      description: Marks a notification as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Notification ID
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications/{id}/unread:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as unread
+      description: Marks a notification as unread
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Notification ID
+      responses:
+        "200":
+          description: Notification marked as unread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications/{id}:
+    delete:
+      tags: [Notifications]
+      summary: Delete notification
+      description: Deletes a specific notification
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Notification ID
+      responses:
+        "200":
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notifications:
+    delete:
+      tags: [Notifications]
+      summary: Delete multiple notifications
+      description: Deletes multiple notifications based on filters
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteNotificationsRequest"
+      responses:
+        "200":
+          description: Notifications deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteNotificationsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     bearerAuth:
@@ -1157,7 +2897,6 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
-
     ### Generic responses ###
     ApiResponse:
       type: object
@@ -1360,7 +3099,76 @@ components:
     # Employment, Education, Qualifications, Referees,
     # Certifications, Development, Memberships, Jobs, Dependents, Activity
     #################################################################
-    # (all of your existing schemas stay as-is here…)
+    EmploymentInput:
+      type: object
+      description: Employment record to create/update. `startDate` is required.
+      required: [jobTitle, employer, startDate]
+      properties:
+        jobTitle:
+          { type: string, description: "Job title (e.g., Mathematics Teacher)" }
+        employer: { type: string, description: "Employer / School name" }
+        location:
+          { type: string, description: "City, State or country (free text)" }
+        startDate:
+          { type: string, format: date, description: "Start date (YYYY-MM-DD)" }
+        endDate:
+          {
+            type: string,
+            format: date,
+            nullable: true,
+            description: "End date or null if current",
+          }
+        isCurrent:
+          {
+            type: boolean,
+            description: "Set true if this is the current position",
+          }
+        responsibilities:
+          type: array
+          items: { type: string }
+          description: "List of responsibilities / bullet points"
+        contactPerson:
+          type: object
+          properties:
+            name: { type: string }
+            position: { type: string }
+            email: { type: string, format: email }
+    Employment:
+      allOf:
+        - $ref: "#/components/schemas/EmploymentInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    EmploymentPublic:
+      type: object
+      properties:
+        jobTitle: { type: string }
+        employer: { type: string }
+        location: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        isCurrent: { type: boolean }
+
+    EmploymentResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Employment"
+
+    EmploymentListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Employment"
 
     #################################################################
     # NEW: School profile schemas
@@ -1401,13 +3209,86 @@ components:
           type: string
         genderType:
           type: string
-        ageGroup:
+          format: date
+          nullable: true
+        credentialId:
+          type: string
+        credentialUrl:
+          type: string
+          format: uri
+        description:
+          type: string
+    Certification:
+      allOf:
+        - $ref: "#/components/schemas/CertificationInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    CertificationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Certification"
+    CertificationListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
+
+    #################################################################
+    # Development schemas
+    #################################################################
+    DevelopmentInput:
+      type: object
+      required: [title, provider]
+      properties:
+        title: { type: string, description: "Course/Workshop title" }
+        provider: { type: string, description: "Providing institution" }
+        type:
+          type: string
+          enum: ["Course", "Workshop", "Seminar", "Training", "Other"]
+          default: "Course"
+        duration:
+          { type: string, description: "Duration text e.g., '40 hours'" }
+        completionDate: { type: string, format: date }
+        certificateUrl: { type: string, format: uri }
+        skillsGained:
           type: array
           items: { type: string }
-        schoolWebsite: { type: string }
-        aboutSchool: { type: string, maxLength: 2000 }
+        impact:
+          { type: string, description: "How it impacted teaching practice" }
+    Development:
+      allOf:
+        - $ref: "#/components/schemas/DevelopmentInput"
+        - type: object
+          properties:
+            _id: { type: string }
+            teacherId: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DevelopmentListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Development"
 
-    AcademicProgram:
+    #################################################################
+    # Membership schemas
+    #################################################################
+    MembershipInput:
       type: object
       required: [programName, educationLevel, curriculum, ageRange, programDuration, classCapacity, coreSubjects, programDescription]
       properties:
@@ -1432,11 +3313,930 @@ components:
       type: object
       properties:
         _id: { type: string }
-        schoolId: { type: string }
-        url: { type: string, example: "https://res.cloudinary.com/demo/image/upload/sample.jpg" }
-        publicId: { type: string }
-        format: { type: string, example: "jpg" }
-        width: { type: integer, example: 800 }
-        height: { type: integer, example: 600 }
-        size: { type: integer, example: 204800 }
-        uploadedAt: { type: string, format: date-time }
+        title: { type: string }
+        organization: { type: string }
+        location: { type: string }
+        publishedAt: { type: string, format: date-time }
+        applicationDeadline: { type: string, format: date-time }
+        salaryMin: { type: number }
+        salaryMax: { type: number }
+        currency: { type: string }
+        salaryDisclose: { type: boolean }
+        daysPosted:
+          { type: integer, description: "Days since published (computed)" }
+        salaryRange:
+          {
+            type: string,
+            description: "Human readable salary range (computed)",
+          }
+        isExpired: { type: boolean }
+    JobsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+    Dependent:
+      type: object
+      required:
+        [
+          fullName,
+          relationship,
+          age,
+          nationality,
+          passportNumber,
+          passportExpiry,
+        ]
+      properties:
+        fullName: { type: string, example: "Jane Smith" }
+        relationship: { type: string, example: "Spouse" }
+        age: { type: integer, example: 25 }
+        nationality: { type: string, example: "American" }
+        passportNumber: { type: string, example: "123456789" }
+        passportExpiry: { type: string, format: date }
+        visaRequired: { type: boolean, example: false }
+        accommodationNeeds:
+          { type: string, example: "2-bedroom apartment near school" }
+        medicalNeeds: { type: string, example: "Diabetic, requires insulin" }
+        educationNeeds: { type: string, example: "Primary school, Grade 3" }
+        additionalNotes: { type: string, example: "Needs wheelchair access" }
+
+    Activity:
+      type: object
+      required: [activityName, activityType, role, startDate, description]
+      properties:
+        activityName: { type: string, example: "Drama Club" }
+        activityType: { type: string, example: "Club" }
+        role: { type: string, example: "President" }
+        organization: { type: string, example: "Community Center" }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        isCurrent: { type: boolean, example: true }
+        timeCommitment: { type: string, example: "5 hours/week" }
+        description:
+          { type: string, example: "Led weekly rehearsals and managed events" }
+        achievements:
+          type: array
+          items: { type: string }
+          example: ["Leadership Award", "Best Play Regional Competition"]
+        skillsDeveloped:
+          type: array
+          items: { type: string }
+          example: ["Leadership", "Public Speaking", "Teamwork"]
+
+    #################################################################
+    # Authentication schemas
+    #################################################################
+    SignupRequest:
+      type: object
+      required: [firstName, lastName, email, password, role]
+      properties:
+        firstName: { type: string, example: "John" }
+        lastName: { type: string, example: "Doe" }
+        email: { type: string, format: email, example: "john.doe@example.com" }
+        password: { type: string, minLength: 8, example: "SecurePassword123!" }
+        role: { type: string, enum: ["teacher", "school"], example: "teacher" }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "john.doe@example.com" }
+        password: { type: string, example: "SecurePassword123!" }
+
+    SendOTPRequest:
+      type: object
+      required: [email, purpose]
+      properties:
+        email: { type: string, format: email, example: "john.doe@example.com" }
+        purpose: { type: string, enum: ["email_verification", "password_reset"], example: "email_verification" }
+
+    VerifyOTPRequest:
+      type: object
+      required: [email, otp, purpose]
+      properties:
+        email: { type: string, format: email, example: "john.doe@example.com" }
+        otp: { type: string, example: "123456" }
+        purpose: { type: string, enum: ["email_verification", "password_reset"], example: "email_verification" }
+
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, example: "john.doe@example.com" }
+
+    PasswordResetConfirmRequest:
+      type: object
+      required: [email, otp, newPassword]
+      properties:
+        email: { type: string, format: email, example: "john.doe@example.com" }
+        otp: { type: string, example: "123456" }
+        newPassword: { type: string, minLength: 8, example: "NewSecurePassword123!" }
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/UserSummary"
+            accessToken: { type: string }
+            refreshToken: { type: string }
+
+    OTPResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            email: { type: string }
+            purpose: { type: string }
+
+    OTPVerificationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            email: { type: string }
+            verified: { type: boolean }
+
+    PasswordResetResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            email: { type: string }
+
+    PasswordResetConfirmResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            email: { type: string }
+            reset: { type: boolean }
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            accessToken: { type: string }
+
+    LogoutResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/UserSummary"
+
+    #################################################################
+    # User Management schemas
+    #################################################################
+    CompleteProfileRequest:
+      type: object
+      properties:
+        firstName: { type: string, example: "John" }
+        lastName: { type: string, example: "Doe" }
+        phoneNumber: { type: string, example: "+1234567890" }
+        dateOfBirth: { type: string, format: date, example: "1990-01-01" }
+        nationality: { type: string, example: "American" }
+        address: { type: string, example: "123 Main St" }
+        city: { type: string, example: "New York" }
+        state: { type: string, example: "NY" }
+        country: { type: string, example: "USA" }
+        zipCode: { type: string, example: "10001" }
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        firstName: { type: string, example: "John" }
+        lastName: { type: string, example: "Doe" }
+        phoneNumber: { type: string, example: "+1234567890" }
+        dateOfBirth: { type: string, format: date, example: "1990-01-01" }
+        nationality: { type: string, example: "American" }
+        address: { type: string, example: "123 Main St" }
+        city: { type: string, example: "New York" }
+        state: { type: string, example: "NY" }
+        country: { type: string, example: "USA" }
+        zipCode: { type: string, example: "10001" }
+
+    UserProfileResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/UserProfile"
+
+    PublicUserProfileResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/PublicUserProfile"
+
+    UsersListResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicUserProfile"
+            pagination:
+              type: object
+              properties:
+                page: { type: integer }
+                limit: { type: integer }
+                total: { type: integer }
+                pages: { type: integer }
+
+    AvatarUpdateResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            avatarUrl: { type: string }
+
+    AccountDeleteResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+
+    UserProfile:
+      type: object
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        phoneNumber: { type: string }
+        dateOfBirth: { type: string, format: date }
+        nationality: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        zipCode: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PublicUserProfile:
+      type: object
+      properties:
+        _id: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        avatarUrl: { type: string }
+        role: { type: string }
+
+    #################################################################
+    # Job Management schemas
+    #################################################################
+    CreateJobRequest:
+      type: object
+      required: [title, organization, location, description]
+      properties:
+        title: { type: string, example: "Mathematics Teacher" }
+        organization: { type: string, example: "Lincoln High School" }
+        location: { type: string, example: "Boston, MA" }
+        description: { type: string, example: "We are seeking a qualified mathematics teacher..." }
+        requirements: { type: array, items: { type: string } }
+        responsibilities: { type: array, items: { type: string } }
+        salaryMin: { type: number, example: 45000 }
+        salaryMax: { type: number, example: 65000 }
+        currency: { type: string, example: "USD" }
+        salaryDisclose: { type: boolean, example: true }
+        applicationDeadline: { type: string, format: date-time }
+        category: { type: string, example: "Teaching" }
+        type: { type: string, enum: ["Full-time", "Part-time", "Contract"], example: "Full-time" }
+        experienceLevel: { type: string, example: "Mid-level" }
+        educationLevel: { type: string, example: "Bachelor's" }
+
+    UpdateJobRequest:
+      type: object
+      properties:
+        title: { type: string }
+        organization: { type: string }
+        location: { type: string }
+        description: { type: string }
+        requirements: { type: array, items: { type: string } }
+        responsibilities: { type: array, items: { type: string } }
+        salaryMin: { type: number }
+        salaryMax: { type: number }
+        currency: { type: string }
+        salaryDisclose: { type: boolean }
+        applicationDeadline: { type: string, format: date-time }
+        category: { type: string }
+        type: { type: string, enum: ["Full-time", "Part-time", "Contract"] }
+        experienceLevel: { type: string }
+        educationLevel: { type: string }
+
+    UpdateJobStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: ["active", "paused", "closed", "draft"], example: "active" }
+
+    UpdateJobFlagsRequest:
+      type: object
+      properties:
+        isUrgent: { type: boolean, example: false }
+        isFeatured: { type: boolean, example: false }
+        isRemote: { type: boolean, example: false }
+
+    BulkUpdateJobStatusRequest:
+      type: object
+      required: [jobIds, status]
+      properties:
+        jobIds: { type: array, items: { type: string } }
+        status: { type: string, enum: ["active", "paused", "closed", "draft"] }
+
+    JobResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/JobDetail"
+
+    JobDetailResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/JobDetail"
+
+    JobsSearchResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            jobs:
+              type: array
+              items:
+                $ref: "#/components/schemas/JobDetail"
+            pagination:
+              type: object
+              properties:
+                page: { type: integer }
+                limit: { type: integer }
+                total: { type: integer }
+                pages: { type: integer }
+
+    JobDetail:
+      allOf:
+        - $ref: "#/components/schemas/Job"
+        - type: object
+          properties:
+            description: { type: string }
+            requirements: { type: array, items: { type: string } }
+            responsibilities: { type: array, items: { type: string } }
+            category: { type: string }
+            type: { type: string }
+            experienceLevel: { type: string }
+            educationLevel: { type: string }
+            isUrgent: { type: boolean }
+            isFeatured: { type: boolean }
+            isRemote: { type: boolean }
+            status: { type: string }
+            schoolId: { type: string }
+            views: { type: integer }
+            applications: { type: integer }
+
+    SchoolDashboardResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            totalJobs: { type: integer }
+            activeJobs: { type: integer }
+            totalApplications: { type: integer }
+            pendingApplications: { type: integer }
+            recentApplications: { type: integer }
+
+    JobStatsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            totalJobs: { type: integer }
+            activeJobs: { type: integer }
+            closedJobs: { type: integer }
+            totalApplications: { type: integer }
+            averageApplicationsPerJob: { type: number }
+
+    BulkUpdateResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            updatedCount: { type: integer }
+            failedCount: { type: integer }
+
+    #################################################################
+    # Job Application schemas
+    #################################################################
+    JobApplicationRequest:
+      type: object
+      required: [coverLetter]
+      properties:
+        coverLetter: { type: string, example: "I am excited to apply for this position..." }
+        resumeUrl: { type: string, format: uri }
+        additionalDocuments: { type: array, items: { type: string, format: uri } }
+        expectedSalary: { type: number }
+        availabilityDate: { type: string, format: date }
+        references: { type: array, items: { type: string } }
+
+    ApplicationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/JobApplication"
+
+    ApplicationsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobApplication"
+
+    ApplicationStatsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            totalApplications: { type: integer }
+            pendingApplications: { type: integer }
+            acceptedApplications: { type: integer }
+            rejectedApplications: { type: integer }
+            shortlistedApplications: { type: integer }
+
+    UpdateApplicationStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: ["pending", "reviewing", "shortlisted", "interview", "accepted", "rejected"], example: "reviewing" }
+        feedback: { type: string }
+        nextStep: { type: string }
+
+    BulkUpdateApplicationStatusRequest:
+      type: object
+      required: [applicationIds, status]
+      properties:
+        applicationIds: { type: array, items: { type: string } }
+        status: { type: string, enum: ["pending", "reviewing", "shortlisted", "interview", "accepted", "rejected"] }
+        feedback: { type: string }
+
+    ScheduleInterviewRequest:
+      type: object
+      required: [interviewDate, interviewType]
+      properties:
+        interviewDate: { type: string, format: date-time }
+        interviewType: { type: string, enum: ["phone", "video", "in-person"], example: "video" }
+        location: { type: string }
+        notes: { type: string }
+
+    ApplicationTimelineResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              action: { type: string }
+              timestamp: { type: string, format: date-time }
+              details: { type: string }
+
+    JobApplication:
+      type: object
+      properties:
+        _id: { type: string }
+        jobId: { type: string }
+        teacherId: { type: string }
+        coverLetter: { type: string }
+        resumeUrl: { type: string }
+        additionalDocuments: { type: array, items: { type: string } }
+        expectedSalary: { type: number }
+        availabilityDate: { type: string, format: date }
+        references: { type: array, items: { type: string } }
+        status: { type: string }
+        feedback: { type: string }
+        interviewDate: { type: string, format: date-time }
+        interviewType: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    #################################################################
+    # Saved Jobs schemas
+    #################################################################
+    SavedJobsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedJob"
+
+    SavedJobsStatsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            totalSaved: { type: integer }
+            recentlySaved: { type: integer }
+            appliedTo: { type: integer }
+
+    SavedJobResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/SavedJob"
+
+    UpdateSavedJobRequest:
+      type: object
+      properties:
+        notes: { type: string }
+        priority: { type: string, enum: ["low", "medium", "high"] }
+
+    SaveJobRequest:
+      type: object
+      properties:
+        notes: { type: string }
+        priority: { type: string, enum: ["low", "medium", "high"] }
+
+    JobSavedStatusResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            isSaved: { type: boolean }
+            savedJobId: { type: string }
+
+    SavedJob:
+      type: object
+      properties:
+        _id: { type: string }
+        teacherId: { type: string }
+        jobId: { type: string }
+        notes: { type: string }
+        priority: { type: string }
+        savedAt: { type: string, format: date-time }
+        job:
+          $ref: "#/components/schemas/JobDetail"
+
+    #################################################################
+    # School Profile schemas
+    #################################################################
+    SchoolProfileRequest:
+      type: object
+      required: [schoolName, country, city]
+      properties:
+        schoolName: { type: string, example: "Lincoln High School" }
+        description: { type: string, example: "A prestigious high school..." }
+        website: { type: string, format: uri, example: "https://lincolnhs.edu" }
+        phone: { type: string, example: "+1-555-123-4567" }
+        email: { type: string, format: email, example: "info@lincolnhs.edu" }
+        address: { type: string, example: "123 Education Street" }
+        city: { type: string, example: "Boston" }
+        state: { type: string, example: "MA" }
+        country: { type: string, example: "USA" }
+        zipCode: { type: string, example: "02101" }
+        schoolType: { type: string, enum: ["Public", "Private", "Charter", "International"], example: "Public" }
+        gradeLevels: { type: array, items: { type: string }, example: ["9", "10", "11", "12"] }
+        studentCount: { type: integer, example: 1200 }
+        foundedYear: { type: integer, example: 1950 }
+        accreditation: { type: array, items: { type: string } }
+        facilities: { type: array, items: { type: string } }
+        specialPrograms: { type: array, items: { type: string } }
+
+    SchoolProfileResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/SchoolProfile"
+
+    SchoolProfilePublicResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/SchoolProfilePublic"
+
+    SchoolProfilesSearchResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            schools:
+              type: array
+              items:
+                $ref: "#/components/schemas/SchoolProfilePublic"
+            pagination:
+              type: object
+              properties:
+                page: { type: integer }
+                limit: { type: integer }
+                total: { type: integer }
+                pages: { type: integer }
+
+    SchoolProfile:
+      type: object
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        schoolName: { type: string }
+        description: { type: string }
+        website: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        zipCode: { type: string }
+        schoolType: { type: string }
+        gradeLevels: { type: array, items: { type: string } }
+        studentCount: { type: integer }
+        foundedYear: { type: integer }
+        accreditation: { type: array, items: { type: string } }
+        facilities: { type: array, items: { type: string } }
+        specialPrograms: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SchoolProfilePublic:
+      type: object
+      properties:
+        _id: { type: string }
+        schoolName: { type: string }
+        description: { type: string }
+        website: { type: string }
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+        schoolType: { type: string }
+        gradeLevels: { type: array, items: { type: string } }
+        studentCount: { type: integer }
+        foundedYear: { type: integer }
+        accreditation: { type: array, items: { type: string } }
+        facilities: { type: array, items: { type: string } }
+        specialPrograms: { type: array, items: { type: string } }
+
+    #################################################################
+    # Upload schemas
+    #################################################################
+    AvatarUploadResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            avatarUrl: { type: string }
+            publicId: { type: string }
+
+    DocumentUploadResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            documentUrl: { type: string }
+            publicId: { type: string }
+            fileName: { type: string }
+            fileSize: { type: integer }
+
+    FileDeleteResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            deleted: { type: boolean }
+
+    UploadPresetResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            preset: { type: string }
+            cloudName: { type: string }
+
+    #################################################################
+    # Notification schemas
+    #################################################################
+    NotificationsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            notifications:
+              type: array
+              items:
+                $ref: "#/components/schemas/Notification"
+            pagination:
+              type: object
+              properties:
+                currentPage: { type: integer }
+                totalPages: { type: integer }
+                totalItems: { type: integer }
+                itemsPerPage: { type: integer }
+                hasNextPage: { type: boolean }
+                hasPrevPage: { type: boolean }
+
+    NotificationStatsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            stats:
+              type: object
+              properties:
+                total: { type: integer }
+                unread: { type: integer }
+                urgent: { type: integer }
+                today: { type: integer }
+                thisWeek: { type: integer }
+
+    UnreadCountResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            unreadCount: { type: integer }
+
+    UrgentNotificationsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            urgentNotifications:
+              type: array
+              items:
+                $ref: "#/components/schemas/Notification"
+            count: { type: integer }
+
+    MarkAllReadResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            message: { type: string }
+            modifiedCount: { type: integer }
+
+    NotificationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Notification"
+
+    DeleteNotificationsRequest:
+      type: object
+      properties:
+        ids: { type: array, items: { type: string } }
+        isRead: { type: boolean }
+        olderThan: { type: integer }
+
+    DeleteNotificationsResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            deletedCount: { type: integer }
+
+    Notification:
+      type: object
+      properties:
+        _id: { type: string }
+        userId: { type: string }
+        type: { type: string, enum: ["application", "interview", "status_change", "reminder", "system"] }
+        category: { type: string, enum: ["job", "application", "system", "reminder"] }
+        priority: { type: string, enum: ["low", "medium", "high", "urgent"] }
+        title: { type: string }
+        message: { type: string }
+        isRead: { type: boolean }
+        actionRequired: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        jobId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        hoursSinceCreated: { type: integer }
+        isExpired: { type: boolean }
+        isUrgent: { type: boolean }
