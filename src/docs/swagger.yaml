@@ -15,7 +15,7 @@ info:
 servers:
   - url: http://localhost:5000/api/v1
     description: Development server
-  - url: https://api.educateglobalhub.com/api/v1
+  - url: https://educate-global-hub-node-production.up.railway.app/api/v1
     description: Production server
 
 tags:
