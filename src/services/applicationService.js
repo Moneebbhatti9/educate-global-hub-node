@@ -14,13 +14,6 @@ class ApplicationService {
    */
   static async submitApplication(jobId, teacherId, applicationData) {
     try {
-      console.log("ApplicationService.submitApplication called with:", {
-        jobId,
-        teacherId,
-        applicationData,
-      });
-      console.log("teacherId type:", typeof teacherId, "value:", teacherId);
-
       // Check if job exists and is active
       const job = await Job.findById(jobId);
       if (!job) {
@@ -78,11 +71,7 @@ class ApplicationService {
         );
       }
 
-      console.log("Creating JobApplication with data:", applicationFields);
-
       const application = new JobApplication(applicationFields);
-
-      console.log("JobApplication instance created:", application);
       await application.save();
 
       // Increment job applicants count
@@ -397,6 +386,430 @@ class ApplicationService {
   }
 
   /**
+   * Get all applications from all jobs posted by a school
+   */
+  static async getAllApplicationsBySchool(
+    schoolId,
+    filters = {},
+    pagination = {}
+  ) {
+    try {
+      const { page = 1, limit = 10, status, jobId } = pagination;
+      const skip = (page - 1) * limit;
+
+      // First, let's check if the school has any jobs
+      // Note: schoolId might be the User ID, not the SchoolProfile ID
+
+      // Try to find jobs by schoolId (which might be the User ID)
+      let schoolJobs = await Job.find({ schoolId }).select(
+        "_id title schoolId"
+      );
+
+      // If no jobs found, try to find by looking up the SchoolProfile
+      if (schoolJobs.length === 0) {
+        const SchoolProfile = require("../models/SchoolProfile");
+        const schoolProfile = await SchoolProfile.findOne({ userId: schoolId });
+        if (schoolProfile) {
+          schoolJobs = await Job.find({ schoolId: schoolProfile._id }).select(
+            "_id title schoolId"
+          );
+        }
+      }
+
+      if (schoolJobs.length === 0) {
+        return {
+          applications: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+          summary: {
+            totalApplications: 0,
+            totalJobs: 0,
+            applicationsByStatus: [],
+          },
+        };
+      }
+
+      // Build aggregation pipeline with better error handling
+      const pipeline = [
+        // Lookup job information
+        {
+          $lookup: {
+            from: "jobs",
+            localField: "jobId",
+            foreignField: "_id",
+            as: "job",
+          },
+        },
+        // Unwind the job array
+        {
+          $unwind: "$job",
+        },
+        // Match applications for jobs posted by the school
+        // We need to match by the actual schoolId from the jobs
+        {
+          $match: {
+            "job.schoolId": { $in: schoolJobs.map((job) => job.schoolId) },
+          },
+        },
+        // Apply additional filters
+        ...(status && status !== "all" ? [{ $match: { status } }] : []),
+        ...(jobId ? [{ $match: { "job._id": jobId } }] : []),
+        // Lookup teacher information
+        {
+          $lookup: {
+            from: "teacherprofiles",
+            localField: "teacherId",
+            foreignField: "_id",
+            as: "teacher",
+          },
+        },
+        // Unwind the teacher array (preserve applications without teachers)
+        {
+          $unwind: {
+            path: "$teacher",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        // Apply search filters if provided
+        ...(filters.search
+          ? [
+              {
+                $match: {
+                  $or: [
+                    {
+                      "teacher.fullName": {
+                        $regex: filters.search,
+                        $options: "i",
+                      },
+                    },
+                    { "job.title": { $regex: filters.search, $options: "i" } },
+                    { coverLetter: { $regex: filters.search, $options: "i" } },
+                    {
+                      reasonForApplying: {
+                        $regex: filters.search,
+                        $options: "i",
+                      },
+                    },
+                  ],
+                },
+              },
+            ]
+          : []),
+        // Apply date range filters if provided
+        ...(filters.dateFrom
+          ? [
+              {
+                $match: { createdAt: { $gte: new Date(filters.dateFrom) } },
+              },
+            ]
+          : []),
+        ...(filters.dateTo
+          ? [
+              {
+                $match: { createdAt: { $lte: new Date(filters.dateTo) } },
+              },
+            ]
+          : []),
+        // Apply salary range filters if provided
+        ...(filters.minSalary
+          ? [
+              {
+                $match: { expectedSalary: { $gte: filters.minSalary } },
+              },
+            ]
+          : []),
+        ...(filters.maxSalary
+          ? [
+              {
+                $match: { expectedSalary: { $lte: filters.maxSalary } },
+              },
+            ]
+          : []),
+        // Apply experience filters if provided
+        ...(filters.minExperience
+          ? [
+              {
+                $match: {
+                  $and: [
+                    { teacher: { $exists: true, $ne: null } },
+                    { "teacher.experience": { $gte: filters.minExperience } },
+                  ],
+                },
+              },
+            ]
+          : []),
+        // Sort by application creation date (newest first)
+        {
+          $sort: { createdAt: -1 },
+        },
+        // Add pagination
+        {
+          $facet: {
+            applications: [
+              { $skip: skip },
+              { $limit: limit },
+              // Project the final structure
+              {
+                $project: {
+                  _id: 1,
+                  status: 1,
+                  coverLetter: 1,
+                  expectedSalary: 1,
+                  availableFrom: 1,
+                  reasonForApplying: 1,
+                  notes: 1,
+                  rejectionReason: 1,
+                  interviewDate: 1,
+                  interviewNotes: 1,
+                  createdAt: 1,
+                  reviewedAt: 1,
+                  withdrawnAt: 1,
+                  withdrawnReason: 1,
+                  job: {
+                    _id: "$job._id",
+                    title: "$job.title",
+                    status: "$job.status",
+                    applicationDeadline: "$job.applicationDeadline",
+                    city: "$job.city",
+                    country: "$job.country",
+                    positionCategory: "$job.positionCategory",
+                    educationLevel: "$job.educationLevel",
+                    jobType: "$job.jobType",
+                    isUrgent: "$job.isUrgent",
+                  },
+                  teacher: {
+                    _id: "$teacher._id",
+                    fullName: "$teacher.fullName",
+                    country: "$teacher.country",
+                    city: "$teacher.city",
+                    experience: "$teacher.experience",
+                    subjects: "$teacher.subjects",
+                    qualifications: "$teacher.qualifications",
+                  },
+                },
+              },
+            ],
+            total: [{ $count: "count" }],
+          },
+        },
+      ];
+
+      const result = await JobApplication.aggregate(pipeline);
+
+      const applications = result[0]?.applications || [];
+      const total = result[0]?.total?.[0]?.count || 0;
+
+      // Get job IDs for fallback queries
+      const jobIds = schoolJobs.map((job) => job._id);
+
+      const directApplications = await JobApplication.find({
+        jobId: { $in: jobIds },
+      });
+
+      // If aggregation is not working, let's use the direct approach as fallback
+      if (applications.length === 0 && directApplications.length > 0) {
+        const fallbackApplications = await JobApplication.find({
+          jobId: { $in: jobIds },
+        })
+          .populate(
+            "jobId",
+            "title status city country positionCategory educationLevel jobType isUrgent"
+          )
+          .populate(
+            "teacherId",
+            "fullName country city experience subjects qualifications"
+          )
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
+        const totalDirect = await JobApplication.countDocuments({
+          jobId: { $in: jobIds },
+        });
+
+        const totalPagesDirect = Math.ceil(totalDirect / limit);
+        const hasNextPageDirect = page < totalPagesDirect;
+        const hasPrevPageDirect = page > 1;
+
+        return {
+          applications: fallbackApplications.map((app) =>
+            this.sanitizeApplicationForSchool(app)
+          ),
+          pagination: {
+            page,
+            limit,
+            total: totalDirect,
+            totalPages: totalPagesDirect,
+            hasNextPage: hasNextPageDirect,
+            hasPrevPage: hasPrevPageDirect,
+          },
+          summary: {
+            totalApplications: totalDirect,
+            totalJobs: schoolJobs.length,
+            applicationsByStatus: await this.getApplicationStatusCounts(
+              schoolId
+            ),
+          },
+        };
+      }
+
+      // Also check if aggregation is working but returning wrong count
+      if (
+        applications.length > 0 &&
+        applications.length < directApplications.length
+      ) {
+        const directPopulatedApplications = await JobApplication.find({
+          jobId: { $in: jobIds },
+        })
+          .populate(
+            "jobId",
+            "title status city country positionCategory educationLevel jobType isUrgent"
+          )
+          .populate(
+            "teacherId",
+            "fullName country city experience subjects qualifications"
+          )
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
+        const totalDirect = await JobApplication.countDocuments({
+          jobId: { $in: jobIds },
+        });
+
+        const totalPagesDirect = Math.ceil(totalDirect / limit);
+        const hasNextPageDirect = page < totalPagesDirect;
+        const hasPrevPageDirect = page > 1;
+
+        return {
+          applications: directPopulatedApplications.map((app) =>
+            this.sanitizeApplicationForSchool(app)
+          ),
+          pagination: {
+            page,
+            limit,
+            total: totalDirect,
+            totalPages: totalPagesDirect,
+            hasNextPage: hasNextPageDirect,
+            hasPrevPage: hasPrevPageDirect,
+          },
+          summary: {
+            totalApplications: totalDirect,
+            totalJobs: schoolJobs.length,
+            applicationsByStatus: await this.getApplicationStatusCounts(
+              schoolId
+            ),
+          },
+        };
+      }
+
+      const totalPages = Math.ceil(total / limit);
+      const hasNextPage = page < totalPages;
+      const hasPrevPage = page > 1;
+
+      return {
+        applications: applications.map((app) =>
+          this.sanitizeApplicationForSchool(app)
+        ),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage,
+          hasPrevPage,
+        },
+        summary: {
+          totalApplications: total,
+          totalJobs: schoolJobs.length,
+          applicationsByStatus: await this.getApplicationStatusCounts(schoolId),
+        },
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to get all applications by school: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get application status counts for a school
+   */
+  static async getApplicationStatusCounts(schoolId) {
+    try {
+      const statusCounts = await JobApplication.aggregate([
+        {
+          $lookup: {
+            from: "jobs",
+            localField: "jobId",
+            foreignField: "_id",
+            as: "job",
+          },
+        },
+        {
+          $unwind: "$job",
+        },
+        {
+          $match: {
+            "job.schoolId": schoolId,
+          },
+        },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $sort: { count: -1 },
+        },
+      ]);
+
+      return statusCounts;
+    } catch (error) {
+      throw new Error(
+        `Failed to get application status counts: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get applications by specific job for a school (with verification)
+   */
+  static async getApplicationsByJobForSchool(
+    jobId,
+    schoolId,
+    filters = {},
+    pagination = {}
+  ) {
+    try {
+      // First verify the job belongs to the school
+      const job = await Job.findOne({ _id: jobId, schoolId });
+      if (!job) {
+        throw new Error("Job not found or access denied");
+      }
+
+      // Use the existing getApplicationsByJob method
+      return await this.getApplicationsByJob(
+        jobId,
+        schoolId,
+        filters,
+        pagination
+      );
+    } catch (error) {
+      throw new Error(
+        `Failed to get job applications for school: ${error.message}`
+      );
+    }
+  }
+
+  /**
    * Get application statistics
    */
   static async getApplicationStats(userId, userRole) {
@@ -571,10 +984,6 @@ class ApplicationService {
         populatedJob.applicantEmail,
         schoolTemplateData
       );
-
-      console.log(
-        `Application emails sent successfully for application ${application._id}`
-      );
     } catch (error) {
       console.error("Failed to send application emails:", error);
       // Don't throw error for email failures
@@ -651,12 +1060,34 @@ class ApplicationService {
    * Sanitize application data for school viewing
    */
   static sanitizeApplicationForSchool(application) {
-    const sanitized = { ...application };
+    // Convert Mongoose document to plain object and remove sensitive fields
+    const sanitized = application.toObject
+      ? application.toObject()
+      : { ...application };
 
     // Remove sensitive teacher information
     if (sanitized.teacherId) {
       delete sanitized.teacherId.phoneNumber;
       delete sanitized.teacherId.email;
+      delete sanitized.teacherId.password;
+      delete sanitized.teacherId.__v;
+    }
+
+    // Remove sensitive application information
+    delete sanitized.__v;
+    delete sanitized.$__;
+    delete sanitized.$isNew;
+    delete sanitized._doc;
+
+    // Ensure proper structure for job and teacher data
+    if (sanitized.jobId && typeof sanitized.jobId === "object") {
+      sanitized.job = sanitized.jobId;
+      delete sanitized.jobId;
+    }
+
+    if (sanitized.teacherId && typeof sanitized.teacherId === "object") {
+      sanitized.teacher = sanitized.teacherId;
+      delete sanitized.teacherId;
     }
 
     return sanitized;
