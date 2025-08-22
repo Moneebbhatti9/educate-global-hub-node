@@ -7,6 +7,15 @@ const {
   validateAdminUserUpdate,
   validateUserStatusChange,
 } = require("../middleware/adminValidation");
+const {
+  validateJobStatusUpdate,
+  validateJobDeletion,
+  validateBulkStatusUpdate,
+  validateJobQueryParams,
+  validateExportQueryParams,
+  validateJobApplicationsQueryParams,
+  validateAnalyticsQueryParams,
+} = require("../middleware/adminJobValidation");
 
 // Apply admin authentication middleware to all routes
 router.use(authenticateToken);
@@ -62,6 +71,55 @@ router.get(
   authenticateToken,
   authorizeRoles(["admin"]),
   adminController.getRecentlyActiveUsers
+);
+
+// ==================== JOB MANAGEMENT ROUTES ====================
+
+// Get all jobs with pagination, search, and filters
+router.get("/jobs", validateJobQueryParams, adminController.getAllJobs);
+
+// Get job statistics
+router.get("/jobs/statistics", adminController.getJobStatistics);
+
+// Get job by ID
+router.get("/jobs/:id", adminController.getJobById);
+
+// Update job status
+router.patch(
+  "/jobs/:id/status",
+  validateJobStatusUpdate,
+  adminController.updateJobStatus
+);
+
+// Delete job
+router.delete("/jobs/:id", validateJobDeletion, adminController.deleteJob);
+
+// Export jobs
+router.get(
+  "/jobs/export",
+  validateExportQueryParams,
+  adminController.exportJobs
+);
+
+// Get job applications
+router.get(
+  "/jobs/:jobId/applications",
+  validateJobApplicationsQueryParams,
+  adminController.getJobApplications
+);
+
+// Bulk update job statuses
+router.patch(
+  "/jobs/bulk-status",
+  validateBulkStatusUpdate,
+  adminController.bulkUpdateJobStatuses
+);
+
+// Get job analytics
+router.get(
+  "/jobs/analytics",
+  validateAnalyticsQueryParams,
+  adminController.getJobAnalytics
 );
 
 module.exports = router;

@@ -294,6 +294,103 @@ components:
           type: boolean
           example: false
 
+    # Admin Job Management Schemas
+    JobStatistics:
+      type: object
+      properties:
+        totalJobs:
+          type: integer
+          example: 5
+          description: Total number of jobs
+        activeJobs:
+          type: integer
+          example: 2
+          description: Number of published jobs
+        pendingJobs:
+          type: integer
+          example: 1
+          description: Number of draft jobs
+        suspendedJobs:
+          type: integer
+          example: 1
+          description: Number of closed jobs
+        expiredJobs:
+          type: integer
+          example: 1
+          description: Number of expired jobs
+
+    JobAnalytics:
+      type: object
+      properties:
+        period:
+          type: string
+          example: "30d"
+          description: Time period for analytics
+        startDate:
+          type: string
+          format: date-time
+          description: Start date of analytics period
+        endDate:
+          type: string
+          format: date-time
+          description: End date of analytics period
+        totalJobsCreated:
+          type: integer
+          example: 15
+          description: Total jobs created in period
+        totalJobsPublished:
+          type: integer
+          example: 12
+          description: Total jobs published in period
+        totalApplications:
+          type: integer
+          example: 89
+          description: Total applications received in period
+        totalViews:
+          type: integer
+          example: 1247
+          description: Total job views in period
+        jobsByType:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            full_time: 8
+            part_time: 4
+            contract: 3
+        jobsByCountry:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            UAE: 6
+            Singapore: 5
+            Kuwait: 4
+        jobsByStatus:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            published: 12
+            draft: 2
+            closed: 1
+
+    BulkUpdateResult:
+      type: object
+      properties:
+        updatedCount:
+          type: integer
+          example: 3
+          description: Number of jobs successfully updated
+        totalRequested:
+          type: integer
+          example: 3
+          description: Total number of jobs requested for update
+        status:
+          type: string
+          example: "published"
+          description: New status applied to jobs
+
 paths:
   /health:
     get:
@@ -2325,6 +2422,604 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==================== ADMIN JOB MANAGEMENT ENDPOINTS ====================
+
+  /admin/jobs:
+    get:
+      tags:
+        - Admin
+      summary: Get all jobs
+      description: Retrieve all jobs with pagination, search, and filtering (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: search
+          in: query
+          description: Search term for job title, school, or location
+          schema:
+            type: string
+            example: "Mathematics Teacher"
+        - name: status
+          in: query
+          description: Filter by job status
+          schema:
+            type: string
+            enum: ["all", "draft", "published", "closed", "expired"]
+            default: "all"
+        - name: jobType
+          in: query
+          description: Filter by job type
+          schema:
+            type: string
+            enum: ["all", "full_time", "part_time", "contract", "substitute"]
+            default: "all"
+        - name: country
+          in: query
+          description: Filter by country
+          schema:
+            type: string
+            example: "UAE"
+        - name: city
+          in: query
+          description: Filter by city
+          schema:
+            type: string
+            example: "Dubai"
+        - name: educationLevel
+          in: query
+          description: Filter by education level
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "early_years",
+                "primary",
+                "secondary",
+                "high_school",
+                "foundation",
+                "higher_education",
+              ]
+            default: "all"
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum:
+              [
+                "createdAt",
+                "updatedAt",
+                "publishedAt",
+                "title",
+                "organization",
+                "country",
+                "city",
+                "salaryMin",
+                "salaryMax",
+                "applicationDeadline",
+                "viewsCount",
+                "applicantsCount",
+              ]
+            default: "createdAt"
+        - name: sortOrder
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum: ["asc", "desc"]
+            default: "desc"
+      responses:
+        "200":
+          description: Jobs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/statistics:
+    get:
+      tags:
+        - Admin
+      summary: Get job statistics
+      description: Retrieve summary statistics for all jobs (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Job statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/{id}:
+    get:
+      tags:
+        - Admin
+      summary: Get job by ID
+      description: Retrieve detailed information about a specific job (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+            example: "507f1f77bcf86cd799439011"
+      responses:
+        "200":
+          description: Job retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Admin
+      summary: Delete job
+      description: Soft delete a job (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+            example: "507f1f77bcf86cd799439011"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 500
+                  example: "Duplicate posting"
+      responses:
+        "200":
+          description: Job deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/{id}/status:
+    patch:
+      tags:
+        - Admin
+      summary: Update job status
+      description: Update the status of a specific job (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+            example: "507f1f77bcf86cd799439011"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: ["draft", "published", "closed", "expired"]
+                  example: "published"
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 500
+                  example: "Approved for publication"
+      responses:
+        "200":
+          description: Job status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/export:
+    get:
+      tags:
+        - Admin
+      summary: Export jobs
+      description: Export jobs data in CSV or JSON format (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by job status
+          schema:
+            type: string
+            enum: ["all", "draft", "published", "closed", "expired"]
+            default: "all"
+        - name: jobType
+          in: query
+          description: Filter by job type
+          schema:
+            type: string
+            enum: ["all", "full_time", "part_time", "contract", "substitute"]
+            default: "all"
+        - name: country
+          in: query
+          description: Filter by country
+          schema:
+            type: string
+            example: "UAE"
+        - name: city
+          in: query
+          description: Filter by city
+          schema:
+            type: string
+            example: "Dubai"
+        - name: educationLevel
+          in: query
+          description: Filter by education level
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "early_years",
+                "primary",
+                "secondary",
+                "high_school",
+                "foundation",
+                "higher_education",
+              ]
+            default: "all"
+        - name: format
+          in: query
+          description: Export format
+          schema:
+            type: string
+            enum: ["csv", "json"]
+            default: "csv"
+      responses:
+        "200":
+          description: Jobs exported successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: CSV file content
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/{jobId}/applications:
+    get:
+      tags:
+        - Admin
+      summary: Get job applications
+      description: Retrieve all applications for a specific job (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+            example: "507f1f77bcf86cd799439011"
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "pending",
+                "reviewed",
+                "shortlisted",
+                "rejected",
+                "accepted",
+              ]
+            default: "all"
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: ["createdAt", "updatedAt", "status", "applicantId"]
+            default: "createdAt"
+        - name: sortOrder
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum: ["asc", "desc"]
+            default: "desc"
+      responses:
+        "200":
+          description: Job applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/bulk-status:
+    patch:
+      tags:
+        - Admin
+      summary: Bulk update job statuses
+      description: Update the status of multiple jobs at once (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - jobIds
+                - status
+              properties:
+                jobIds:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  example:
+                    ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]
+                status:
+                  type: string
+                  enum: ["draft", "published", "closed", "expired"]
+                  example: "published"
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 500
+                  example: "Approved for publication"
+      responses:
+        "200":
+          description: Job statuses updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/jobs/analytics:
+    get:
+      tags:
+        - Admin
+      summary: Get job analytics
+      description: Retrieve analytics data for jobs over a specified period (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          description: Time period for analytics
+          schema:
+            type: string
+            enum: ["7d", "30d", "90d", "1y"]
+            default: "30d"
+      responses:
+        "200":
+          description: Job analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
           content:
             application/json:
               schema:

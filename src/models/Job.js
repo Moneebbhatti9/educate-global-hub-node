@@ -215,6 +215,39 @@ const jobSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ["draft", "published", "closed", "expired"],
+          required: true,
+        },
+        reason: {
+          type: String,
+          trim: true,
+          maxlength: 500,
+        },
+        changedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        changedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      },
+    ],
+    deletedAt: {
+      type: Date,
+    },
+    deletionReason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
+    closedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -296,6 +329,19 @@ jobSchema.pre("save", function (next) {
     this.status = "expired";
   }
 
+  // Handle deleted status
+  if (this.status === "deleted" && !this.deletedAt) {
+    this.deletedAt = new Date();
+  }
+
+  // Handle closed/expired status
+  if (
+    (this.status === "closed" || this.status === "expired") &&
+    !this.closedAt
+  ) {
+    this.closedAt = new Date();
+  }
+
   next();
 });
 
@@ -348,6 +394,7 @@ jobSchema.statics.findPublished = function () {
   return this.find({
     status: "published",
     applicationDeadline: { $gt: new Date() },
+    deletedAt: { $exists: false },
   });
 };
 
@@ -356,6 +403,7 @@ jobSchema.statics.findExpired = function () {
   return this.find({
     applicationDeadline: { $lte: new Date() },
     status: { $in: ["published"] },
+    deletedAt: { $exists: false },
   });
 };
 
