@@ -20,6 +20,12 @@ const teacherProfileRoutes = require("./routes/teacherProfile");
 const schoolProfileRoutes = require("./routes/schoolProfile");
 const jobRoutes = require("./routes/jobs");
 const notificationRoutes = require("./routes/notification");
+const adminRoutes = require("./routes/admin");
+const {
+  applyMiddlewares,
+  applyErrorMdiddlewares,
+  applyErrorMiddlewares,
+} = require("./middleware");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,6 +79,7 @@ const speedLimiter = slowDown({
     return (used - delayAfter) * 500;
   },
 });
+applyMiddlewares(app);
 
 app.use(limiter);
 app.use(speedLimiter);
@@ -110,12 +117,9 @@ app.use(`/api/${apiVersion}/teacher-profiles`, teacherProfileRoutes);
 app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
 app.use(`/api/${apiVersion}/jobs`, jobRoutes);
 app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
+app.use(`/api/${apiVersion}/admin`, adminRoutes);
 
-// 404 handler
-app.use(notFoundHandler);
-
-// Error handler (must be last)
-app.use(errorHandler);
+applyErrorMiddlewares(app);
 
 // Start server
 app.listen(PORT, () => {

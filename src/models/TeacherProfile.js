@@ -101,6 +101,10 @@ const teacherProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    profileCompletion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -140,7 +144,7 @@ teacherProfileSchema.pre("save", function (next) {
 });
 
 // Method to check if profile is complete
-teacherProfileSchema.methods.checkProfileCompletion = function () {
+teacherProfileSchema.methods.checkProfileCompletion = async function () {
   const requiredFields = [
     "fullName",
     "phoneNumber",
@@ -155,9 +159,39 @@ teacherProfileSchema.methods.checkProfileCompletion = function () {
     "professionalBio",
   ];
 
-  return requiredFields.every(
-    (field) => this[field] && this[field].toString().trim() !== ""
-  );
+  let filled = 0;
+  requiredFields.forEach((field) => {
+    if (this[field] && this[field].toString().trim() !== "") filled++;
+  });
+
+  // Count sub-collections
+  const TeacherEmployment = require("./TeacherEmployment");
+  const TeacherEducation = require("./TeacherEducation");
+  const TeacherQualification = require("./TeacherQualification");
+  const TeacherReferee = require("./TeacherReferee");
+
+  const [employmentCount, educationCount, qualificationCount, refereeCount] =
+    await Promise.all([
+      TeacherEmployment.countDocuments({ teacherId: this._id }),
+      TeacherEducation.countDocuments({ teacherId: this._id }),
+      TeacherQualification.countDocuments({ teacherId: this._id }),
+      TeacherReferee.countDocuments({ teacherId: this._id }),
+    ]);
+
+  // Backward compatibility with your legacy arrays on the profile:
+  const legacyQualificationLike =
+    (Array.isArray(this.certifications) && this.certifications.length > 0) ||
+    (Array.isArray(this.additionalQualifications) &&
+      this.additionalQualifications.length > 0);
+
+  let score = filled;
+  if (employmentCount > 0) score++;
+  if (educationCount > 0) score++;
+  if (qualificationCount > 0 || legacyQualificationLike) score++;
+  if (refereeCount > 0) score++;
+
+  const total = requiredFields.length + 4; // + employment, education, qualifications, referees
+  return Math.round((score / total) * 100);
 };
 
 module.exports = mongoose.model("TeacherProfile", teacherProfileSchema);
