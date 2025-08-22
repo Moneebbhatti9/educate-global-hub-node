@@ -53,7 +53,7 @@ router.get("/:schoolId/programs", listProgramsBySchoolId);
 
 // Upload media for a school
 router.post(
-  "/",
+  "/media",
   authenticateToken,
   upload.array("files", 5), // allow multiple (max 5 per request)
   addSchoolMedia

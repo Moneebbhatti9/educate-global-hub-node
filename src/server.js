@@ -20,7 +20,12 @@ const teacherProfileRoutes = require("./routes/teacherProfile");
 const schoolProfileRoutes = require("./routes/schoolProfile");
 const jobRoutes = require("./routes/jobs");
 const notificationRoutes = require("./routes/notification");
-const { applyMiddlewares, applyErrorMdiddlewares, applyErrorMiddlewares } = require("./middleware");
+const adminRoutes = require("./routes/admin");
+const {
+  applyMiddlewares,
+  applyErrorMdiddlewares,
+  applyErrorMiddlewares,
+} = require("./middleware");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -112,9 +117,9 @@ app.use(`/api/${apiVersion}/teacher-profiles`, teacherProfileRoutes);
 app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
 app.use(`/api/${apiVersion}/jobs`, jobRoutes);
 app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
+app.use(`/api/${apiVersion}/admin`, adminRoutes);
 
 applyErrorMiddlewares(app);
-
 
 // Start server
 app.listen(PORT, () => {
