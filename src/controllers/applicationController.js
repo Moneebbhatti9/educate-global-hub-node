@@ -12,13 +12,6 @@ class ApplicationController {
       const { userId, role } = req.user;
       const applicationData = req.body;
 
-      console.log("Submit application request:", {
-        jobId,
-        userId,
-        role,
-        applicationData,
-      });
-
       // For teachers, we need to get the TeacherProfile ID from the User ID
       let teacherId = userId;
       if (role === "teacher") {
@@ -28,10 +21,7 @@ class ApplicationController {
           return sendResponse(res, 400, false, "Teacher profile not found");
         }
         teacherId = teacherProfile._id;
-        console.log("Found teacher profile:", teacherProfile._id);
       }
-
-      console.log("Final teacherId:", teacherId);
 
       const application = await ApplicationService.submitApplication(
         jobId,
@@ -230,6 +220,105 @@ class ApplicationController {
         200,
         true,
         "Teacher applications retrieved successfully",
+        result
+      );
+    } catch (error) {
+      return sendResponse(res, 400, false, error.message);
+    }
+  }
+
+  /**
+   * Get all applications from all jobs posted by a school
+   */
+  static async getAllApplicationsBySchool(req, res) {
+    try {
+      const { userId, role } = req.user;
+
+      // Only schools can access this endpoint
+      if (role !== "school") {
+        return sendResponse(
+          res,
+          403,
+          false,
+          "Access denied. Only schools can view all applications."
+        );
+      }
+
+      const filters = {
+        status: req.query.status || "all",
+        search: req.query.search || null,
+        dateFrom: req.query.dateFrom || null,
+        dateTo: req.query.dateTo || null,
+        minSalary: req.query.minSalary ? parseInt(req.query.minSalary) : null,
+        maxSalary: req.query.maxSalary ? parseInt(req.query.maxSalary) : null,
+        minExperience: req.query.minExperience
+          ? parseInt(req.query.minExperience)
+          : null,
+      };
+
+      const pagination = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10,
+        jobId: req.query.jobId || null,
+      };
+
+      const result = await ApplicationService.getAllApplicationsBySchool(
+        userId,
+        filters,
+        pagination
+      );
+
+      return sendResponse(
+        res,
+        200,
+        true,
+        "All school applications retrieved successfully",
+        result
+      );
+    } catch (error) {
+      return sendResponse(res, 400, false, error.message);
+    }
+  }
+
+  /**
+   * Get applications by specific job for a school
+   */
+  static async getApplicationsByJobForSchool(req, res) {
+    try {
+      const { jobId } = req.params;
+      const { userId, role } = req.user;
+
+      // Only schools can access this endpoint
+      if (role !== "school") {
+        return sendResponse(
+          res,
+          403,
+          false,
+          "Access denied. Only schools can view job applications."
+        );
+      }
+
+      const filters = {
+        status: req.query.status || "all",
+      };
+
+      const pagination = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10,
+      };
+
+      const result = await ApplicationService.getApplicationsByJobForSchool(
+        jobId,
+        userId,
+        filters,
+        pagination
+      );
+
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Job applications retrieved successfully",
         result
       );
     } catch (error) {

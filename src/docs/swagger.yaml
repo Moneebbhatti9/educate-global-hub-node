@@ -3613,6 +3613,292 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /jobs/applications/school/all:
+    get:
+      tags:
+        - Applications
+      summary: Get all applications by school
+      description: Get all applications from all jobs posted by the authenticated school
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "pending",
+                "reviewing",
+                "shortlisted",
+                "interviewed",
+                "accepted",
+                "rejected",
+                "withdrawn",
+              ]
+            default: "all"
+      responses:
+        "200":
+          description: All school applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All school applications retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      applications:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              example: "507f1f77bcf86cd799439011"
+                            status:
+                              type: string
+                              example: "pending"
+                            coverLetter:
+                              type: string
+                              example: "I am interested in this position..."
+                            expectedSalary:
+                              type: number
+                              example: 50000
+                            availableFrom:
+                              type: string
+                              format: date-time
+                              example: "2024-01-01T00:00:00.000Z"
+                            reasonForApplying:
+                              type: string
+                              example: "Great opportunity to grow..."
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2024-01-01T00:00:00.000Z"
+                            job:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "507f1f77bcf86cd799439012"
+                                title:
+                                  type: string
+                                  example: "Mathematics Teacher"
+                                status:
+                                  type: string
+                                  example: "active"
+                                city:
+                                  type: string
+                                  example: "New York"
+                                country:
+                                  type: string
+                                  example: "USA"
+                                positionCategory:
+                                  type: string
+                                  example: "Teaching"
+                                educationLevel:
+                                  type: string
+                                  example: "High School"
+                                jobType:
+                                  type: string
+                                  example: "Full-time"
+                                isUrgent:
+                                  type: boolean
+                                  example: false
+                            teacher:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "507f1f77bcf86cd799439013"
+                                fullName:
+                                  type: string
+                                  example: "John Doe"
+                                country:
+                                  type: string
+                                  example: "USA"
+                                city:
+                                  type: string
+                                  example: "New York"
+                                experience:
+                                  type: string
+                                  example: "5 years"
+                                subjects:
+                                  type: array
+                                  items:
+                                    type: string
+                                  example: ["Mathematics", "Physics"]
+                                qualifications:
+                                  type: array
+                                  items:
+                                    type: string
+                                  example: ["Master's Degree"]
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          total:
+                            type: integer
+                            example: 30
+                          totalPages:
+                            type: integer
+                            example: 3
+                          hasNextPage:
+                            type: boolean
+                            example: true
+                          hasPrevPage:
+                            type: boolean
+                            example: false
+                      summary:
+                        type: object
+                        properties:
+                          totalApplications:
+                            type: integer
+                            example: 30
+                            description: Total applications across all jobs
+                          totalJobs:
+                            type: integer
+                            example: 3
+                            description: Total jobs posted by the school
+                          applicationsByStatus:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "pending"
+                                count:
+                                  type: integer
+                                  example: 15
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - school role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/applications/school/job/{jobId}:
+    get:
+      tags:
+        - Applications
+      summary: Get applications by specific job for school
+      description: Get all applications for a specific job with school ownership verification
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+                            example: "507f1f77bcf86cd799439011"
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "pending",
+                "reviewing",
+                "shortlisted",
+                "interviewed",
+                "accepted",
+                "rejected",
+                "withdrawn",
+              ]
+            default: "all"
+      responses:
+        "200":
+          description: Job applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - school role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found or access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /jobs/{jobId}/applications:
     get:
       tags:
