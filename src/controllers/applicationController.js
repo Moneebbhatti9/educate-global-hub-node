@@ -5,6 +5,7 @@ class ApplicationController {
   /**
    * Submit a job application
    */
+  
   static async submitApplication(req, res) {
     try {
       const { jobId } = req.params;
@@ -639,6 +640,7 @@ class ApplicationController {
       return sendResponse(res, 400, false, error.message);
     }
   }
+
 
   /**
    * Convert applications to CSV format

@@ -16,20 +16,20 @@ const {
 
 const router = express.Router();
 
-// Rate limiting for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5, // limit each IP to 5 requests per windowMs
-  message: {
-    success: false,
-    message: "Too many authentication attempts, please try again later.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// // Rate limiting for auth endpoints
+// const authLimiter = rateLimit({
+//   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+//   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5, // limit each IP to 5 requests per windowMs
+//   message: {
+//     success: false,
+//     message: "Too many authentication attempts, please try again later.",
+//   },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
 
-// Apply rate limiting to all auth routes
-router.use(authLimiter);
+// // Apply rate limiting to all auth routes
+// router.use(authLimiter);
 
 // @route   POST /api/v1/auth/signup
 // @desc    Register a new user

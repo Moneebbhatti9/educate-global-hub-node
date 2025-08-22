@@ -103,7 +103,7 @@ const createOrUpdateTeacherProfile = async (req, res) => {
     }
 
     //  Compute profile completion
-    const completion = await TeacherProfile.checkProfileCompletion();
+    const completion = await teacherProfile.checkProfileCompletion();
     teacherProfile.profileCompletion = completion;
     teacherProfile.isProfileComplete = completion === 100;
     await teacherProfile.save();
