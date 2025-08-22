@@ -1,7 +1,10 @@
 const SchoolProfile = require("../models/SchoolProfile");
+const SchoolProgram = require("../models/SchoolProgram");
+const SchoolMedia = require("../models/SchoolMedia");
 const User = require("../models/User");
 const { successResponse, errorResponse } = require("../utils/response");
 const { validateAndFormatPhone } = require("../utils/phoneUtils");
+const { uploadImage, deleteImage } = require("../config/cloudinary");
 
 // Create or update school profile
 const createOrUpdateSchoolProfile = async (req, res) => {
@@ -23,6 +26,11 @@ const createOrUpdateSchoolProfile = async (req, res) => {
       ageGroup,
       schoolWebsite,
       aboutSchool,
+      registrationNumber,
+      alternateContactNumber,
+      establishedYear,
+      mission,
+      vision,
     } = req.body;
 
     // Check if user exists and is a school
@@ -40,8 +48,15 @@ const createOrUpdateSchoolProfile = async (req, res) => {
       schoolContactNumber,
       country
     );
-    if (!phoneValidation.isValid) {
-      return errorResponse(res, phoneValidation.error, 400);
+    let phoneValidationAlt = { isValid: true, formatted: undefined };
+    if (alternateContactNumber) {
+      phoneValidationAlt = validateAndFormatPhone(
+        alternateContactNumber,
+        country
+      );
+      if (!phoneValidationAlt.isValid) {
+        return errorResponse(res, phoneValidationAlt.error, 400);
+      }
     }
 
     // Check if profile already exists
@@ -65,6 +80,12 @@ const createOrUpdateSchoolProfile = async (req, res) => {
         ageGroup,
         schoolWebsite,
         aboutSchool,
+        registrationNumber,
+        alternateContactNumber:
+          phoneValidationAlt?.formatted || alternateContactNumber,
+        establishedYear,
+        mission,
+        vision,
       };
 
       schoolProfile = await SchoolProfile.findOneAndUpdate(
@@ -209,9 +230,199 @@ const searchSchools = async (req, res) => {
   }
 };
 
+async function getMySchoolId(userId) {
+  const school = await SchoolProfile.findOne({ userId }, "_id");
+  return school ? school._id : null;
+}
+
+// Add program
+const addProgram = async (req, res) => {
+  try {
+    const schoolId = await getMySchoolId(req.user.userId);
+    if (!schoolId) return errorResponse(res, "School profile not found", 404);
+
+    const program = await SchoolProgram.create({
+      schoolId,
+      createdBy: req.user.userId,
+      ...req.body,
+    });
+
+    return successResponse(res, "Program added successfully", {
+      data: program,
+    });
+  } catch (err) {
+    console.error("addProgram:", err);
+    return errorResponse(res, "Failed to add program", 500);
+  }
+};
+
+// Update program
+const updateProgram = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const program = await SchoolProgram.findById(id);
+    if (!program) return errorResponse(res, "Program not found", 404);
+
+    const owns = await SchoolProfile.exists({
+      _id: program.schoolId,
+      userId: req.user.userId,
+    });
+    if (!owns) return errorResponse(res, "Forbidden", 403);
+
+    Object.assign(program, req.body);
+    await program.save();
+
+    return successResponse(res, "Program updated successfully", {
+      data: program,
+    });
+  } catch (err) {
+    console.error("updateProgram:", err);
+    return errorResponse(res, "Failed to update program", 500);
+  }
+};
+
+// Delete program
+const deleteProgram = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const program = await SchoolProgram.findById(id);
+    if (!program) return errorResponse(res, "Program not found", 404);
+
+    const owns = await SchoolProfile.exists({
+      _id: program.schoolId,
+      userId: req.user.userId,
+    });
+    if (!owns) return errorResponse(res, "Forbidden", 403);
+
+    await program.deleteOne();
+    return successResponse(res, "Program deleted successfully", {
+      data: { id },
+    });
+  } catch (err) {
+    console.error("deleteProgram:", err);
+    return errorResponse(res, "Failed to delete program", 500);
+  }
+};
+
+// List my programs
+const listMyPrograms = async (req, res) => {
+  try {
+    const schoolId = await getMySchoolId(req.user.userId);
+    if (!schoolId) return errorResponse(res, "School profile not found", 404);
+
+    const programs = await SchoolProgram.find({ schoolId }).sort({
+      createdAt: -1,
+    });
+    return successResponse(res, "Programs retrieved", { data: programs });
+  } catch (err) {
+    console.error("listMyPrograms:", err);
+    return errorResponse(res, "Failed to fetch programs", 500);
+  }
+};
+
+// Public: list programs by schoolId
+const listProgramsBySchoolId = async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const programs = await SchoolProgram.find({
+      schoolId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+    return successResponse(res, "Programs retrieved", { data: programs });
+  } catch (err) {
+    console.error("listProgramsBySchoolId:", err);
+    return errorResponse(res, "Failed to fetch programs", 500);
+  }
+};
+
+const addSchoolMedia = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const schoolProfile = await SchoolProfile.findOne({ userId });
+    if (!schoolProfile)
+      return errorResponse(res, "School profile not found", 404);
+
+    if (!req.files || req.files.length === 0)
+      return errorResponse(res, "No files uploaded", 400);
+
+    const uploadedMedia = [];
+    for (const file of req.files) {
+      const result = await uploadImage(
+        `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
+        `educate-hub/schools/${schoolProfile._id}`
+      );
+      if (!result.success) continue;
+
+      const media = await SchoolMedia.create({
+        schoolId: schoolProfile._id,
+        url: result.url,
+        publicId: result.public_id,
+        mediaType: "image",
+        uploadedBy: userId,
+        width: result.width,
+        height: result.height,
+        size: result.size,
+        format: result.format,
+      });
+      uploadedMedia.push(media);
+    }
+
+    return successResponse(res, "Media uploaded successfully", {
+      files: uploadedMedia,
+    });
+  } catch (err) {
+    console.error("addSchoolMedia error:", err);
+    return errorResponse(res, "Failed to upload media", 500);
+  }
+};
+
+// Get school media
+const getSchoolMedia = async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const media = await SchoolMedia.find({ schoolId }).sort({ createdAt: -1 });
+    return successResponse(res, "Media retrieved", { files: media });
+  } catch (err) {
+    console.error("getSchoolMedia error:", err);
+    return errorResponse(res, "Failed to fetch media", 500);
+  }
+};
+
+// Delete school media
+const deleteSchoolMedia = async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+    const userId = req.user.userId;
+
+    const media = await SchoolMedia.findById(mediaId);
+    if (!media) return errorResponse(res, "Media not found", 404);
+
+    const schoolProfile = await SchoolProfile.findById(media.schoolId);
+    if (!schoolProfile || !schoolProfile.userId.equals(userId)) {
+      return errorResponse(res, "Not authorized to delete this media", 403);
+    }
+
+    await deleteImage(media.publicId);
+    await media.deleteOne();
+
+    return successResponse(res, "Media deleted successfully");
+  } catch (err) {
+    console.error("deleteSchoolMedia error:", err);
+    return errorResponse(res, "Failed to delete media", 500);
+  }
+};
+
 module.exports = {
   createOrUpdateSchoolProfile,
   getSchoolProfile,
   getSchoolProfileById,
   searchSchools,
+  addProgram,
+  listMyPrograms,
+  updateProgram,
+  deleteProgram,
+  listProgramsBySchoolId,
+  addSchoolMedia,
+  getSchoolMedia,
+  deleteSchoolMedia,
 };

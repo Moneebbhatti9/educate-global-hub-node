@@ -131,6 +131,25 @@ const schoolProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    registrationNumber: { type: String, trim: true },
+    alternateContactNumber: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          return !v || isValidPhoneNumber(v);
+        },
+        message:
+          "Alternate contact must include country code (e.g., +1234567890)",
+      },
+    },
+    establishedYear: {
+      type: Number,
+      min: 1800,
+      max: new Date().getFullYear(),
+    },
+    mission: { type: String, trim: true, maxlength: 2000 },
+    vision: { type: String, trim: true, maxlength: 2000 },
   },
   {
     timestamps: true,
@@ -158,42 +177,47 @@ schoolProfileSchema.set("toObject", { virtuals: true });
 
 // Pre-save middleware to ensure contact number has country code
 schoolProfileSchema.pre("save", function (next) {
+  const { formatPhoneNumber } = require("../utils/phoneUtils");
   if (this.schoolContactNumber && !this.schoolContactNumber.startsWith("+")) {
-    // If contact number doesn't start with +, try to add country code
-    const { formatPhoneNumber } = require("../utils/phoneUtils");
     const formatted = formatPhoneNumber(this.schoolContactNumber, this.country);
-    if (formatted) {
-      this.schoolContactNumber = formatted;
-    }
+    if (formatted) this.schoolContactNumber = formatted;
+  }
+  if (
+    this.alternateContactNumber &&
+    !this.alternateContactNumber.startsWith("+")
+  ) {
+    const formattedAlt = formatPhoneNumber(
+      this.alternateContactNumber,
+      this.country
+    );
+    if (formattedAlt) this.alternateContactNumber = formattedAlt;
   }
   next();
 });
 
-// Method to check if profile is complete
-schoolProfileSchema.methods.checkProfileCompletion = function () {
-  const requiredFields = [
-    "schoolName",
-    "schoolEmail",
-    "schoolContactNumber",
-    "country",
-    "city",
-    "province",
-    "zipCode",
-    "address",
-    "curriculum",
-    "schoolSize",
-    "schoolType",
-    "genderType",
-    "ageGroup",
-    "aboutSchool",
-  ];
+schoolProfileSchema.index({ schoolName: "text", aboutSchool: "text" });
 
-  return requiredFields.every((field) => {
-    const value = this[field];
-    if (Array.isArray(value)) {
-      return value.length > 0;
-    }
-    return value && value.toString().trim() !== "";
+const REQUIRED = [
+  "schoolName",
+  "schoolEmail",
+  "schoolContactNumber",
+  "country",
+  "city",
+  "province",
+  "zipCode",
+  "address",
+  "curriculum",
+  "schoolSize",
+  "schoolType",
+  "genderType",
+  "ageGroup",
+  "aboutSchool",
+  "establishedYear", // added
+];
+schoolProfileSchema.methods.checkProfileCompletion = function () {
+  return REQUIRED.every((f) => {
+    const v = this[f];
+    return Array.isArray(v) ? v.length > 0 : v && v.toString().trim() !== "";
   });
 };
 

@@ -2,8 +2,18 @@ const nodemailer = require("nodemailer");
 const { getEmailTemplate } = require("../utils/templateEngine");
 
 // Create transporter
-const createTransporter = () =>
-  nodemailer.createTransport({
+const createTransporter = () => {
+  if (
+    !process.env.EMAIL_HOST ||
+    !process.env.EMAIL_USER ||
+    !process.env.EMAIL_PASS
+  ) {
+    throw new Error(
+      "Email configuration incomplete. Please check EMAIL_HOST, EMAIL_USER, and EMAIL_PASS environment variables."
+    );
+  }
+
+  return nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || "gmail",
     host: process.env.EMAIL_HOST,
     port: process.env.EMAIL_PORT,
@@ -13,6 +23,7 @@ const createTransporter = () =>
       pass: process.env.EMAIL_PASS,
     },
   });
+};
 
 // Email subjects
 const emailSubjects = {

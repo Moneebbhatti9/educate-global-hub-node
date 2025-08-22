@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["teacher", "school", "recruiter", "supplier", "admin"],
     },
+    status: {
+      type: String,
+      enum: ["active", "inactive", "suspended", "pending"],
+      default: "pending",
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -53,6 +58,10 @@ const userSchema = new mongoose.Schema(
         message: "Phone number must include country code (e.g., +1234567890)",
       },
     },
+    lastActive: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,
@@ -62,7 +71,9 @@ const userSchema = new mongoose.Schema(
 // Index for better query performance
 // Note: email index is automatically created by unique: true constraint
 userSchema.index({ role: 1 });
+userSchema.index({ status: 1 });
 userSchema.index({ isEmailVerified: 1 });
+userSchema.index({ lastActive: 1 });
 
 // Virtual for full name
 userSchema.virtual("fullName").get(function () {
