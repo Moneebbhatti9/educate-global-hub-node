@@ -896,6 +896,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change user password
+      description: Change the authenticated user's password. Requires current password verification.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+                - confirmPassword
+              properties:
+                currentPassword:
+                  type: string
+                  description: User's current password
+                  example: "currentPassword123"
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: New password (must meet complexity requirements)
+                  example: "newPassword123!"
+                confirmPassword:
+                  type: string
+                  description: Confirmation of new password
+                  example: "newPassword123!"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password changed successfully. Please login again with your new password."
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid current password or token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /users/complete-profile:
     post:
       tags:
@@ -942,7 +1007,7 @@ paths:
       tags:
         - Users
       summary: Get current user profile
-      description: Retrieve the current user's complete profile
+      description: Retrieve the current user's complete profile including associated role-specific profile data
       security:
         - BearerAuth: []
       responses:
@@ -951,7 +1016,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      profile:
+                        oneOf:
+                          - $ref: "#/components/schemas/TeacherProfile"
+                          - $ref: "#/components/schemas/SchoolProfile"
+                          - type: "null"
+                        description: "Role-specific profile data (TeacherProfile for teachers, SchoolProfile for schools, null for other roles)"
         "401":
           description: Unauthorized
           content:
@@ -1028,7 +1111,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User profile retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      profile:
+                        oneOf:
+                          - $ref: "#/components/schemas/TeacherProfile"
+                          - $ref: "#/components/schemas/SchoolProfile"
+                          - type: "null"
+                        description: "Role-specific profile data (TeacherProfile for teachers, SchoolProfile for schools, null for other roles)"
         "404":
           description: User not found
           content:
@@ -2976,7 +3077,16 @@ paths:
           description: Sort field
           schema:
             type: string
-            enum: ["createdAt", "updatedAt", "status", "teacherName", "appliedAt", "expectedSalary", "availableFrom"]
+            enum:
+              [
+                "createdAt",
+                "updatedAt",
+                "status",
+                "teacherName",
+                "appliedAt",
+                "expectedSalary",
+                "availableFrom",
+              ]
             default: "createdAt"
         - name: sortOrder
           in: query
@@ -3144,7 +3254,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Avatar uploaded successfully"
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl:
+                        type: string
+                        format: uri
+                        example: "https://res.cloudinary.com/example/image/upload/v123/avatars/filename.jpg"
         "400":
           description: Bad request - invalid file
           content:
@@ -3928,7 +4052,7 @@ paths:
           description: Job ID
           schema:
             type: string
-                            example: "507f1f77bcf86cd799439011"
+            example: "507f1f77bcf86cd799439011"
         - name: page
           in: query
           description: Page number
@@ -6568,7 +6692,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SuccessResponse"
         "400":
           description: Bad request - validation error
           content:
