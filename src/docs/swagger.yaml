@@ -264,12 +264,106 @@ components:
           items:
             type: string
           example: ["https://example.com/certificate.pdf"]
-        appliedAt:
+        expectedSalary:
+          type: number
+          example: 50000
+        availableFrom:
+          type: string
+          format: date-time
+        reasonForApplying:
+          type: string
+          example: "I am passionate about teaching and have relevant experience..."
+        additionalComments:
+          type: string
+          example: "Additional information about my application..."
+        screeningAnswers:
+          type: object
+          additionalProperties:
+            type: string
+        notes:
+          type: string
+          example: "Internal notes about the application..."
+        reviewedBy:
+          type: string
+          example: "507f1f77bcf86cd799439014"
+        reviewedAt:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+          example: "Does not meet minimum requirements"
+        interviewDate:
+          type: string
+          format: date-time
+        interviewNotes:
+          type: string
+          example: "Interview notes and feedback..."
+        isWithdrawn:
+          type: boolean
+          example: false
+        withdrawnAt:
+          type: string
+          format: date-time
+        withdrawnReason:
+          type: string
+          example: "Accepted another position"
+        createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        teacher:
+          $ref: "#/components/schemas/TeacherInfo"
+
+    # Teacher Information Schema
+    TeacherInfo:
+      type: object
+      properties:
+        fullName:
+          type: string
+          example: "John Doe"
+          description: "Teacher's full name"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+          description: "Teacher's email address"
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: "United States"
+            city:
+              type: string
+              example: "New York"
+            province:
+              type: string
+              example: "NY"
+            address:
+              type: string
+              example: "123 Main Street"
+            zipCode:
+              type: string
+              example: "10001"
+        phoneNumber:
+          type: string
+          example: "+1234567890"
+          description: "Teacher's phone number"
+        qualification:
+          type: string
+          enum: ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"]
+          example: "Master"
+          description: "Teacher's highest qualification"
+        subject:
+          type: string
+          example: "Mathematics"
+          description: "Subject the teacher specializes in"
+        yearsOfTeachingExperience:
+          type: number
+          example: 5
+          description: "Years of teaching experience"
 
     # Pagination Schema
     Pagination:
@@ -2882,7 +2976,7 @@ paths:
           description: Sort field
           schema:
             type: string
-            enum: ["createdAt", "updatedAt", "status", "applicantId"]
+            enum: ["createdAt", "updatedAt", "status", "teacherName", "appliedAt", "expectedSalary", "availableFrom"]
             default: "createdAt"
         - name: sortOrder
           in: query
