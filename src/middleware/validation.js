@@ -128,6 +128,32 @@ const validationSchemas = {
       }),
   }),
 
+  // Change password (for authenticated users)
+  changePassword: Joi.object({
+    currentPassword: Joi.string().required().messages({
+      "any.required": "Current password is required",
+    }),
+    newPassword: Joi.string()
+      .min(8)
+      .pattern(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/
+      )
+      .required()
+      .messages({
+        "string.min": "New password must be at least 8 characters long",
+        "string.pattern.base":
+          "New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+        "any.required": "New password is required",
+      }),
+    confirmPassword: Joi.string()
+      .valid(Joi.ref("newPassword"))
+      .required()
+      .messages({
+        "any.only": "Passwords do not match",
+        "any.required": "Password confirmation is required",
+      }),
+  }),
+
   // Profile completion
   completeProfile: Joi.object({
     phone: Joi.string()

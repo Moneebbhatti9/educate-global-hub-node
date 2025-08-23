@@ -12,6 +12,7 @@ const {
   refresh,
   logout,
   getCurrentUser,
+  changePassword,
 } = require("../controllers/authController");
 
 const router = express.Router();
@@ -79,5 +80,15 @@ router.post("/logout", validate("logout"), logout);
 // @desc    Get current user
 // @access  Private
 router.get("/me", authenticateToken, getCurrentUser);
+
+// @route   POST /api/v1/auth/change-password
+// @desc    Change user password
+// @access  Private
+router.post(
+  "/change-password",
+  authenticateToken,
+  validate("changePassword"),
+  changePassword
+);
 
 module.exports = router;
