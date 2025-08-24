@@ -227,10 +227,15 @@ const validationSchemas = {
 
   // Teacher profile validation
   teacherProfile: Joi.object({
-    fullName: Joi.string().min(2).max(100).required().messages({
-      "string.min": "Full name must be at least 2 characters long",
-      "string.max": "Full name cannot exceed 100 characters",
-      "any.required": "Full name is required",
+    firstName: Joi.string().min(2).max(100).required().messages({
+      "string.min": "First name must be at least 2 characters long",
+      "string.max": "First name cannot exceed 100 characters",
+      "any.required": "First name is required",
+    }),
+    lastName: Joi.string().min(2).max(100).required().messages({
+      "string.min": "Last name must be at least 2 characters long",
+      "string.max": "Last name cannot exceed 100 characters",
+      "any.required": "Last name is required",
     }),
     phoneNumber: Joi.string()
       .pattern(/^\+[1-9]\d{1,14}$/)

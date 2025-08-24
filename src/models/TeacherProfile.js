@@ -45,12 +45,12 @@ const teacherProfileSchema = new mongoose.Schema(
       },
     },
 
-    dateOfBirth: { type: Date, required: true },
-    placeOfBirth: { type: String, required: true, trim: true },
-    nationality: { type: String, required: true, trim: true },
+    dateOfBirth: { type: Date, required: false },
+    placeOfBirth: { type: String, required: false, trim: true },
+    nationality: { type: String, required: false, trim: true },
     passportNumber: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       minlength: 5,
       maxlength: 30,
@@ -62,12 +62,12 @@ const teacherProfileSchema = new mongoose.Schema(
 
     gender: {
       type: String,
-      required: true,
+      required: false,
       enum: ["Male", "Female", "Non-binary", "Prefer not to say", "Other"],
     },
     maritalStatus: {
       type: String,
-      required: true,
+      required: false,
       enum: ["Single", "Married", "Divorced", "Widowed", "Other"],
     },
 
