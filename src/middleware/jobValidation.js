@@ -465,24 +465,40 @@ const jobValidationSchemas = {
 
   // Job application schema
   createApplication: Joi.object({
-    coverLetter: Joi.string().min(200).max(2000).required().messages({
-      "string.min": "Cover letter must be at least 200 characters long",
-      "string.max": "Cover letter cannot exceed 2000 characters",
-      "any.required": "Cover letter is required",
-    }),
+    coverLetter: Joi.string()
+      .required()
+      .custom((value, helpers) => {
+        const wordCount = value.trim().split(/\s+/).length;
+        if (wordCount < 30) {
+          return helpers.error("coverLetter.minWords");
+        }
+        if (wordCount > 300) {
+          return helpers.error("coverLetter.maxWords");
+        }
+        return value;
+      })
+      .messages({
+        "any.required": "Cover letter is required",
+        "coverLetter.minWords": "Cover letter must be at least 30 words long",
+        "coverLetter.maxWords": "Cover letter cannot exceed 300 words",
+      }),
+
     expectedSalary: Joi.number().positive().optional().messages({
       "number.base": "Expected salary must be a number",
       "number.positive": "Expected salary must be positive",
     }),
+
     availableFrom: Joi.date().min(new Date()).required().messages({
       "date.min": "Available from date must be today or in the future",
       "any.required": "Available from date is required",
     }),
+
     reasonForApplying: Joi.string().min(50).max(1000).required().messages({
       "string.min": "Reason for applying must be at least 50 characters long",
       "string.max": "Reason for applying cannot exceed 1000 characters",
       "any.required": "Reason for applying is required",
     }),
+
     additionalComments: Joi.string()
       .max(500)
       .allow("")
@@ -491,15 +507,18 @@ const jobValidationSchemas = {
       .messages({
         "string.max": "Additional comments cannot exceed 500 characters",
       }),
+
     screeningAnswers: Joi.object()
       .pattern(/^.+$/, Joi.string().min(1).max(500))
       .optional()
       .messages({
         "object.pattern": "Screening answers must be valid key-value pairs",
       }),
+
     resumeUrl: Joi.string().uri().optional().messages({
       "string.uri": "Resume URL must be a valid URL",
     }),
+
     documents: Joi.array()
       .items(Joi.string().uri())
       .max(5)

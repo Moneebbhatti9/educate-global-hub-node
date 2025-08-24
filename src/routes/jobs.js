@@ -95,6 +95,13 @@ router.get(
   ApplicationController.getApplicationsByJobForSchool
 );
 
+router.get(
+  "/applications/my-applications",
+  authenticate,
+  authorize(["teacher"]),
+  ApplicationController.getMyApplications
+);
+
 router.patch(
   "/applications/bulk/status",
   authenticate,

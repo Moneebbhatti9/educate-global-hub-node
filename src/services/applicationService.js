@@ -228,8 +228,6 @@ class ApplicationService {
     }
   }
 
-
-
   /**
    * Withdraw application
    */
@@ -346,24 +344,168 @@ class ApplicationService {
     pagination = {}
   ) {
     try {
-      const { page = 1, limit = 10, status } = pagination;
+      const {
+        page = 1,
+        limit = 10,
+        status,
+        search,
+        dateFrom,
+        dateTo,
+      } = pagination;
       const skip = (page - 1) * limit;
 
       const query = { teacherId };
+
+      console.log("Debug - Query params:", { teacherId, filters, pagination });
+      console.log("Debug - Initial query:", query);
 
       if (status && status !== "all") {
         query.status = status;
       }
 
-      const [applications, total] = await Promise.all([
-        JobApplication.find(query)
-          .populate("jobId", "title schoolId status applicationDeadline")
+      // Add date range filtering if provided
+      if (dateFrom || dateTo) {
+        query.createdAt = {};
+        if (dateFrom) {
+          query.createdAt.$gte = new Date(dateFrom);
+        }
+        if (dateTo) {
+          query.createdAt.$lte = new Date(dateTo);
+        }
+      }
+
+      console.log("Debug - Final query:", query);
+
+      // Use aggregation pipeline for search functionality
+      let applications, total;
+
+      if (search) {
+        // Search in job title and school name
+        const pipeline = [
+          { $match: query },
+          {
+            $lookup: {
+              from: "jobs",
+              localField: "jobId",
+              foreignField: "_id",
+              as: "job",
+            },
+          },
+          {
+            $lookup: {
+              from: "schoolprofiles",
+              localField: "job.schoolId",
+              foreignField: "_id",
+              as: "school",
+            },
+          },
+          {
+            $match: {
+              $or: [
+                { "job.title": { $regex: search, $options: "i" } },
+                { "school.schoolName": { $regex: search, $options: "i" } },
+              ],
+            },
+          },
+          {
+            $addFields: {
+              jobId: {
+                _id: "$job._id",
+                title: "$job.title",
+                status: "$job.status",
+                applicationDeadline: "$job.applicationDeadline",
+                jobType: "$job.jobType",
+                educationLevel: "$job.educationLevel",
+                minSalary: "$job.minSalary",
+                maxSalary: "$job.maxSalary",
+                city: "$job.city",
+                country: "$job.country",
+                schoolName: { $arrayElemAt: ["$school.schoolName", 0] },
+                stateProvince: { $arrayElemAt: ["$school.stateProvince", 0] },
+              },
+            },
+          },
+          {
+            $project: {
+              job: 0,
+              school: 0,
+            },
+          },
+          {
+            $facet: {
+              applications: [
+                { $sort: { createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+              ],
+              total: [{ $count: "count" }],
+            },
+          },
+        ];
+
+        console.log("Debug - Using aggregation pipeline for search");
+        const result = await JobApplication.aggregate(pipeline);
+        applications = result[0].applications;
+        total = result[0].total[0]?.count || 0;
+      } else {
+        // Simple query without search - but with enhanced population
+        console.log("Debug - Using simple query with enhanced population");
+
+        // First get applications with basic job population
+        const basicApplications = await JobApplication.find(query)
+          .populate(
+            "jobId",
+            "title schoolId status applicationDeadline jobType educationLevel minSalary maxSalary city country"
+          )
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .lean(),
-        JobApplication.countDocuments(query),
-      ]);
+          .lean();
+
+        // Then enhance with school information
+        const SchoolProfile = require("../models/SchoolProfile");
+        applications = await Promise.all(
+          basicApplications.map(async (app) => {
+            if (app.jobId && app.jobId.schoolId) {
+              // If job already has city/country, use those; otherwise fetch from SchoolProfile
+              if (!app.jobId.city || !app.jobId.country) {
+                const schoolProfile = await SchoolProfile.findById(
+                  app.jobId.schoolId
+                )
+                  .select("schoolName city country stateProvince")
+                  .lean();
+
+                if (schoolProfile) {
+                  app.jobId.schoolName = schoolProfile.schoolName;
+                  // Only override if not already present
+                  if (!app.jobId.city) app.jobId.city = schoolProfile.city;
+                  if (!app.jobId.country)
+                    app.jobId.country = schoolProfile.country;
+                  app.jobId.stateProvince = schoolProfile.stateProvince;
+                }
+              } else {
+                // Job has city/country, just fetch school name
+                const schoolProfile = await SchoolProfile.findById(
+                  app.jobId.schoolId
+                )
+                  .select("schoolName stateProvince")
+                  .lean();
+
+                if (schoolProfile) {
+                  app.jobId.schoolName = schoolProfile.schoolName;
+                  app.jobId.stateProvince = schoolProfile.stateProvince;
+                }
+              }
+            }
+            return app;
+          })
+        );
+
+        total = await JobApplication.countDocuments(query);
+      }
+
+      console.log("Debug - Found applications:", applications.length);
+      console.log("Debug - Total count:", total);
 
       const totalPages = Math.ceil(total / limit);
       const hasNextPage = page < totalPages;
@@ -383,6 +525,7 @@ class ApplicationService {
         },
       };
     } catch (error) {
+      console.error("Debug - Error in getApplicationsByTeacher:", error);
       throw new Error(`Failed to get teacher applications: ${error.message}`);
     }
   }
@@ -806,256 +949,23 @@ class ApplicationService {
       );
     } catch (error) {
       throw new Error(
-        `Failed to get job applications for school: ${error.message}`
+        `Failed to get applications by job for school: ${error.message}`
       );
     }
   }
 
   /**
-   * Get application statistics
+   * Sanitize application data for teacher viewing
    */
-  static async getApplicationStats(userId, userRole) {
-    try {
-      let stats;
+  static sanitizeApplicationForTeacher(application) {
+    const sanitized = { ...application };
 
-      if (userRole === "school") {
-        // Get stats for school's jobs
-        stats = await JobApplication.aggregate([
-          {
-            $lookup: {
-              from: "jobs",
-              localField: "jobId",
-              foreignField: "_id",
-              as: "job",
-            },
-          },
-          {
-            $match: {
-              "job.schoolId": new mongoose.Types.ObjectId(userId),
-            },
-          },
-          {
-            $group: {
-              _id: "$status",
-              count: { $sum: 1 },
-            },
-          },
-        ]);
-      } else {
-        // Get stats for teacher's applications
-        stats = await JobApplication.aggregate([
-          {
-            $match: {
-              teacherId: new mongoose.Types.ObjectId(userId),
-            },
-          },
-          {
-            $group: {
-              _id: "$status",
-              count: { $sum: 1 },
-            },
-          },
-        ]);
-      }
-
-      return stats;
-    } catch (error) {
-      throw new Error(`Failed to get application stats: ${error.message}`);
+    // Remove sensitive school information
+    if (sanitized.jobId && sanitized.jobId.schoolId) {
+      delete sanitized.jobId.schoolId;
     }
-  }
 
-  /**
-   * Get recent applications for dashboard
-   */
-  static async getRecentApplications(userId, userRole, limit = 5) {
-    try {
-      let query;
-
-      if (userRole === "school") {
-        // Get recent applications for school's jobs
-        query = JobApplication.aggregate([
-          {
-            $lookup: {
-              from: "jobs",
-              localField: "jobId",
-              foreignField: "_id",
-              as: "job",
-            },
-          },
-          {
-            $match: {
-              "job.schoolId": new mongoose.Types.ObjectId(userId),
-            },
-          },
-          {
-            $sort: { createdAt: -1 },
-          },
-          {
-            $limit: limit,
-          },
-          {
-            $lookup: {
-              from: "teacherprofiles",
-              localField: "teacherId",
-              foreignField: "_id",
-              as: "teacher",
-            },
-          },
-        ]);
-      } else {
-        // Get recent applications for teacher
-        query = JobApplication.find({ teacherId: userId })
-          .populate("jobId", "title schoolId status applicationDeadline")
-          .sort({ createdAt: -1 })
-          .limit(limit)
-          .lean();
-      }
-
-      const applications = await query;
-      return applications;
-    } catch (error) {
-      throw new Error(`Failed to get recent applications: ${error.message}`);
-    }
-  }
-
-  /**
-   * Send application emails
-   */
-  static async sendApplicationEmails(
-    application,
-    populatedJob,
-    populatedTeacher
-  ) {
-    try {
-      // Prepare template data for teacher confirmation email
-      const teacherTemplateData = {
-        teacherName: populatedTeacher.fullName,
-        jobTitle: populatedJob.title,
-        schoolName: populatedJob.schoolId.schoolName,
-        applicationId: application._id,
-        city: populatedJob.city,
-        country: populatedJob.country,
-        positionCategory: populatedJob.positionCategory,
-        educationLevel: populatedJob.educationLevel,
-        jobType: populatedJob.jobType,
-        isUrgent: populatedJob.isUrgent,
-        applicationDate: new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }),
-        dashboardUrl: `${
-          process.env.FRONTEND_URL || "http://localhost:3000"
-        }/dashboard/applications/${application._id}`,
-      };
-
-      // Prepare template data for school notification email
-      const schoolTemplateData = {
-        jobTitle: populatedJob.title,
-        organization: populatedJob.organization,
-        city: populatedJob.city,
-        country: populatedJob.country,
-        applicationId: application._id,
-        isUrgent: populatedJob.isUrgent,
-        teacherName: populatedTeacher.fullName,
-        teacherEmail: populatedTeacher.email,
-        teacherCity: populatedTeacher.city,
-        teacherCountry: populatedTeacher.country,
-        teacherExperience: populatedTeacher.experience || "Not specified",
-        teacherSubjects: populatedTeacher.subjects
-          ? populatedTeacher.subjects.join(", ")
-          : "Not specified",
-        applicationDate: new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }),
-        dashboardUrl: `${
-          process.env.FRONTEND_URL || "http://localhost:3000"
-        }/dashboard/jobs/${populatedJob._id}/applications`,
-      };
-
-      // Send confirmation email to teacher
-      await sendApplicationConfirmationEmail(
-        populatedTeacher.email,
-        teacherTemplateData
-      );
-
-      // Send notification email to school using applicantEmail from job
-      await sendNewApplicationNotificationEmail(
-        populatedJob.applicantEmail,
-        schoolTemplateData
-      );
-    } catch (error) {
-      console.error("Failed to send application emails:", error);
-      // Don't throw error for email failures
-    }
-  }
-
-  /**
-   * Send status change emails
-   */
-  static async sendStatusChangeEmails(application, oldStatus, newStatus) {
-    try {
-      if (oldStatus === newStatus) return;
-
-      const job = await Job.findById(application.jobId);
-      const teacher = await require("../models/TeacherProfile").findById(
-        application.teacherId
-      );
-
-      if (!job || !teacher) return;
-
-      // Send email to teacher about status change
-      await sendEmail({
-        to: teacher.email,
-        subject: `Application Status Updated - ${job.title}`,
-        template: "application-status-update",
-        context: {
-          teacherName: teacher.fullName,
-          jobTitle: job.title,
-          oldStatus,
-          newStatus,
-          applicationId: application._id,
-          notes: application.notes,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to send status change emails:", error);
-      // Don't throw error for email failures
-    }
-  }
-
-  /**
-   * Create status change notifications
-   */
-  static async createStatusChangeNotifications(
-    application,
-    oldStatus,
-    newStatus
-  ) {
-    try {
-      if (oldStatus === newStatus) return;
-
-      const job = await Job.findById(application.jobId);
-      if (!job) return;
-
-      // Create notification for teacher
-      await JobNotification.createNotification({
-        userId: application.teacherId,
-        type: `application_${newStatus}`,
-        title: "Application Status Updated",
-        message: `Your application for "${job.title}" has been updated to ${newStatus}.`,
-        category: "application",
-        priority: "medium",
-        actionRequired: newStatus === "interviewed" || newStatus === "accepted",
-        // Remove actionUrl to avoid validation error
-        actionText: "View Details",
-      });
-    } catch (error) {
-      console.error("Failed to create status change notifications:", error);
-      // Don't throw error for notification failures
-    }
+    return sanitized;
   }
 
   /**
@@ -1093,97 +1003,6 @@ class ApplicationService {
     }
 
     return sanitized;
-  }
-
-  /**
-   * Sanitize application data for teacher viewing
-   */
-  static sanitizeApplicationForTeacher(application) {
-    const sanitized = { ...application };
-
-    // Remove sensitive school information
-    if (sanitized.jobId) {
-      delete sanitized.jobId.schoolId;
-    }
-
-    return sanitized;
-  }
-
-  /**
-   * Get overdue applications (in reviewing status for too long)
-   */
-  static async getOverdueApplications(schoolId) {
-    try {
-      const overdueDate = new Date();
-      overdueDate.setDate(overdueDate.getDate() - 14); // 14 days threshold
-
-      const applications = await JobApplication.aggregate([
-        {
-          $lookup: {
-            from: "jobs",
-            localField: "jobId",
-            foreignField: "_id",
-            as: "job",
-          },
-        },
-        {
-          $match: {
-            "job.schoolId": new mongoose.Types.ObjectId(schoolId),
-            status: "reviewing",
-            createdAt: { $lt: overdueDate },
-          },
-        },
-        {
-          $lookup: {
-            from: "teacherprofiles",
-            localField: "teacherId",
-            foreignField: "_id",
-            as: "teacher",
-          },
-        },
-        {
-          $sort: { createdAt: 1 },
-        },
-      ]);
-
-      return applications;
-    } catch (error) {
-      throw new Error(`Failed to get overdue applications: ${error.message}`);
-    }
-  }
-
-  /**
-   * Bulk update application statuses
-   */
-  static async bulkUpdateApplicationStatuses(
-    applicationIds,
-    schoolId,
-    updateData
-  ) {
-    try {
-      const results = [];
-
-      for (const applicationId of applicationIds) {
-        try {
-          const result = await this.updateApplicationStatus(
-            applicationId,
-            schoolId,
-            updateData
-          );
-          results.push({ id: applicationId, success: true, data: result });
-        } catch (error) {
-          results.push({
-            id: applicationId,
-            success: false,
-            error: error.message,
-          });
-        }
-      }
-
-      return results;
-    } catch (error) {
-      throw new Error(`Failed to bulk update applications: ${error.message}`);
-    }
   }
 }
 

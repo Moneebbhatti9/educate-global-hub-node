@@ -5,7 +5,7 @@ class ApplicationController {
   /**
    * Submit a job application
    */
-  
+
   static async submitApplication(req, res) {
     try {
       const { jobId } = req.params;
@@ -223,6 +223,68 @@ class ApplicationController {
         result
       );
     } catch (error) {
+      return sendResponse(res, 400, false, error.message);
+    }
+  }
+
+  /**
+   * Get applications for the authenticated teacher (teacher dashboard)
+   */
+  static async getMyApplications(req, res) {
+    try {
+      const { userId, role } = req.user;
+
+      // Only teachers can access this endpoint
+      if (role !== "teacher") {
+        return sendResponse(
+          res,
+          403,
+          false,
+          "Access denied. Only teachers can view their own applications."
+        );
+      }
+
+      // First find the teacher profile using userId
+      const TeacherProfile = require("../models/TeacherProfile");
+      const teacherProfile = await TeacherProfile.findOne({ userId });
+
+      if (!teacherProfile) {
+        return sendResponse(
+          res,
+          404,
+          false,
+          "Teacher profile not found. Please complete your profile first."
+        );
+      }
+
+      const filters = {
+        status: req.query.status || "all",
+        search: req.query.search || null,
+        dateFrom: req.query.dateFrom || null,
+        dateTo: req.query.dateTo || null,
+      };
+
+      const pagination = {
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10,
+      };
+
+      // Use the TeacherProfile._id (not User._id) to query applications
+      const result = await ApplicationService.getApplicationsByTeacher(
+        teacherProfile._id,
+        filters,
+        pagination
+      );
+
+      return sendResponse(
+        res,
+        200,
+        true,
+        "Your applications retrieved successfully",
+        result
+      );
+    } catch (error) {
+      console.error("Error in getMyApplications:", error);
       return sendResponse(res, 400, false, error.message);
     }
   }
@@ -729,7 +791,6 @@ class ApplicationController {
       return sendResponse(res, 400, false, error.message);
     }
   }
-
 
   /**
    * Convert applications to CSV format
