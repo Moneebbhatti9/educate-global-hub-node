@@ -31,7 +31,7 @@ const {
 // Signup controller
 const signup = async (req, res, next) => {
   try {
-    const { email, password, firstName, lastName, role = "student" } = req.body;
+    const { email, password, firstName, lastName, role } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -336,6 +336,58 @@ const getCurrentUser = async (req, res, next) => {
   }
 };
 
+// Change password controller
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await comparePassword(
+      currentPassword,
+      user.passwordHash
+    );
+    if (!isCurrentPasswordValid) {
+      return unauthorizedResponse(res, "Current password is incorrect");
+    }
+
+    // Check if new password is same as current password
+    const isSamePassword = await comparePassword(
+      newPassword,
+      user.passwordHash
+    );
+    if (isSamePassword) {
+      return validationErrorResponse(
+        res,
+        "New password must be different from current password"
+      );
+    }
+
+    // Hash new password
+    const newPasswordHash = await hashPassword(newPassword);
+
+    // Update password
+    await User.updateOne({ _id: userId }, { passwordHash: newPasswordHash });
+
+    // Revoke all refresh tokens for security
+    await revokeAllRefreshTokens(userId);
+
+    return successResponse(
+      res,
+      null,
+      "Password changed successfully. Please login again with your new password."
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -346,4 +398,5 @@ module.exports = {
   refresh,
   logout,
   getCurrentUser,
+  changePassword,
 };

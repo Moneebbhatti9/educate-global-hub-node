@@ -44,7 +44,7 @@ const {
 
 // Create or update teacher profile (requires authentication)
 router.post(
-  "/",
+  "/create",
   authenticateToken,
   validate("teacherProfile"),
   createOrUpdateTeacherProfile
@@ -121,6 +121,5 @@ router.post("/me/activities", authenticateToken, addActivity);
 router.get("/me/activities", authenticateToken, getActivities);
 router.put("/me/activities/:id", authenticateToken, updateActivity);
 router.delete("/me/activities/:id", authenticateToken, deleteActivity);
-
 
 module.exports = router;

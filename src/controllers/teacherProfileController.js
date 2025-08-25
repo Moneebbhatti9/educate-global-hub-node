@@ -22,20 +22,46 @@ const {
 const createOrUpdateTeacherProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const {
-      fullName,
-      phoneNumber,
-      country,
-      city,
+    let {
+      // Legacy (accept old payloads)
       province,
       zipCode,
       address,
+
+      // New/normalized personal fields
+      firstName,
+      lastName,
+      professionalTitle,
+      email,
+      phoneNumber,
+      alternatePhone,
+      dateOfBirth,
+      placeOfBirth,
+      nationality,
+      passportNumber,
+      gender,
+      maritalStatus,
+
+      // Address fields
+      streetAddress,
+      city,
+      stateProvince,
+      country,
+      postalCode,
+      linkedin,
+
+      // Languages array (from modal)
+      languages,
+
+      // Professional fields
       qualification,
       subject,
       pgce,
       yearsOfTeachingExperience,
       professionalBio,
       keyAchievements,
+      certifications,
+      additionalQualifications,
     } = req.body;
 
     //  Check if user exists and is a teacher
@@ -48,62 +74,158 @@ const createOrUpdateTeacherProfile = async (req, res) => {
         403
       );
 
-    //  Validate and format phone number
-    const phoneValidation = validateAndFormatPhone(phoneNumber, country);
-    if (!phoneValidation.isValid) {
-      return errorResponse(res, phoneValidation.error, 400);
+    // Fetch existing profile early (needed for fallbacks)
+    let teacherProfile = await TeacherProfile.findOne({ userId });
+
+    const countryForPhone = country || teacherProfile?.country;
+
+    // Validate & format primary phone
+    let formattedPhone;
+    if (phoneNumber !== undefined) {
+      const phoneValidation = validateAndFormatPhone(
+        phoneNumber,
+        countryForPhone
+      );
+      if (!phoneValidation.isValid) {
+        return errorResponse(res, phoneValidation.error, 400);
+      }
+      formattedPhone = phoneValidation.formatted;
     }
 
-    //  Check if profile exists
-    let teacherProfile = await TeacherProfile.findOne({ userId });
+    // Validate & format alternate phone
+    let formattedAlternatePhone;
+    if (alternatePhone) {
+      const altVal = validateAndFormatPhone(alternatePhone, countryForPhone);
+      if (!altVal.isValid) {
+        return errorResponse(res, `Alternate phone: ${altVal.error}`, 400);
+      }
+      formattedAlternatePhone = altVal.formatted;
+    }
+
+    // Validate date of birth
+    let dob;
+    if (dateOfBirth) {
+      dob = new Date(dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        return errorResponse(
+          res,
+          "Invalid dateOfBirth. Use YYYY-MM-DD or ISO date.",
+          400
+        );
+      }
+    }
+
+    // Normalize languages
+    const normalizedLanguages = Array.isArray(languages)
+      ? languages
+          .map((l) => ({
+            language: String(l.language || l.name || "").trim(),
+            proficiency: l.proficiency,
+            isNative:
+              !!l.isNative ||
+              String(l.proficiency || "").toLowerCase() === "native",
+          }))
+          .filter((l) => l.language) // drop empty entries
+      : [];
+
+    // Build update data
+    const updateData = {
+      // personal / contact
+      firstName,
+      lastName,
+      professionalTitle,
+      phoneNumber: formattedPhone,
+      alternatePhone: formattedAlternatePhone,
+      dateOfBirth: dob,
+      placeOfBirth,
+      nationality,
+      passportNumber,
+      gender,
+      maritalStatus,
+
+      // address
+      city,
+      country,
+      linkedin,
+
+      // languages
+      ...(Array.isArray(languages) ? { languages: normalizedLanguages } : {}),
+
+      // professional
+      qualification,
+      subject,
+      ...(pgce !== undefined ? { pgce: !!pgce } : {}),
+      yearsOfTeachingExperience,
+      professionalBio,
+      keyAchievements,
+      certifications,
+      additionalQualifications,
+
+      // persist legacy fields for backward compatibility
+      streetAddress: streetAddress || address,
+      stateProvince: stateProvince || province,
+      postalCode: postalCode || zipCode,
+      province: stateProvince || province,
+      address: streetAddress || address,
+    };
+
+    // Email handling: keep provided, fallback to account email only on creation
+    if (email) updateData.email = email;
+    else if (!teacherProfile) updateData.email = user.email;
+
+    // Remove undefined values (allows partial updates)
+    Object.keys(updateData).forEach(
+      (k) => updateData[k] === undefined && delete updateData[k]
+    );
 
     if (teacherProfile) {
       // Update existing profile
-      const updateData = {
-        fullName,
-        phoneNumber: phoneValidation.formatted,
-        country,
-        city,
-        province,
-        zipCode,
-        address,
-        qualification,
-        subject,
-        pgce: pgce || false,
-        yearsOfTeachingExperience,
-        professionalBio,
-        keyAchievements: keyAchievements || [],
-      };
-
       teacherProfile = await TeacherProfile.findOneAndUpdate(
         { userId },
         updateData,
         { new: true, runValidators: true }
       );
     } else {
+      // Ensure required fields on create
+      const requiredOnCreate = [
+        "firstName",
+        "lastName",
+        "email",
+        "phoneNumber",
+        "streetAddress",
+        "city",
+        "stateProvince",
+        "country",
+        "postalCode",
+        "qualification",
+        "subject",
+        "yearsOfTeachingExperience",
+        "professionalBio",
+      ];
+
+      const missing = requiredOnCreate.filter(
+        (f) => !updateData[f] && updateData[f] !== 0
+      );
+
+      if (missing.length) {
+        return errorResponse(
+          res,
+          `Missing required fields for profile creation: ${missing.join(", ")}`,
+          400
+        );
+      }
+
       // Create new profile
       teacherProfile = new TeacherProfile({
         userId,
-        fullName,
-        phoneNumber: phoneValidation.formatted,
-        country,
-        city,
-        province,
-        zipCode,
-        address,
-        qualification,
-        subject,
-        pgce: pgce || false,
-        yearsOfTeachingExperience,
-        professionalBio,
-        keyAchievements: keyAchievements || [],
+        ...updateData,
       });
 
       await teacherProfile.save();
     }
 
-    //  Compute profile completion
-    const completion = await TeacherProfile.checkProfileCompletion();
+    // Compute profile completion
+    const completion = await teacherProfile.checkProfileCompletion();
     teacherProfile.profileCompletion = completion;
     teacherProfile.isProfileComplete = completion === 100;
     await teacherProfile.save();
@@ -113,6 +235,8 @@ const createOrUpdateTeacherProfile = async (req, res) => {
       profileCompletion: completion,
       isProfileComplete: completion === 100,
     });
+
+    // Fetch related collections
     const [employment, education, qualifications, referees] = await Promise.all(
       [
         TeacherEmployment.find({ teacherId: teacherProfile._id }),
@@ -240,9 +364,11 @@ const getTeacherProfileById = async (req, res) => {
       memberships,
     };
 
-    return successResponse(res,
+    return successResponse(
+      res,
       publicProfile,
-      "Teacher profile retrieved successfully");
+      "Teacher profile retrieved successfully"
+    );
   } catch (error) {
     console.error("Error in getTeacherProfileById:", error);
     return errorResponse(res, "Failed to retrieve teacher profile", 500);

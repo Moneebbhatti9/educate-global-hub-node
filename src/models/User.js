@@ -80,6 +80,22 @@ userSchema.virtual("fullName").get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
+// Virtual populate for teacher profile
+userSchema.virtual("teacherProfile", {
+  ref: "TeacherProfile",
+  localField: "_id",
+  foreignField: "userId",
+  justOne: true,
+});
+
+// Virtual populate for school profile
+userSchema.virtual("schoolProfile", {
+  ref: "SchoolProfile",
+  localField: "_id",
+  foreignField: "userId",
+  justOne: true,
+});
+
 // Method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.passwordHash);

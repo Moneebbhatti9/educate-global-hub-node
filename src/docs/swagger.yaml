@@ -264,12 +264,106 @@ components:
           items:
             type: string
           example: ["https://example.com/certificate.pdf"]
-        appliedAt:
+        expectedSalary:
+          type: number
+          example: 50000
+        availableFrom:
+          type: string
+          format: date-time
+        reasonForApplying:
+          type: string
+          example: "I am passionate about teaching and have relevant experience..."
+        additionalComments:
+          type: string
+          example: "Additional information about my application..."
+        screeningAnswers:
+          type: object
+          additionalProperties:
+            type: string
+        notes:
+          type: string
+          example: "Internal notes about the application..."
+        reviewedBy:
+          type: string
+          example: "507f1f77bcf86cd799439014"
+        reviewedAt:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+          example: "Does not meet minimum requirements"
+        interviewDate:
+          type: string
+          format: date-time
+        interviewNotes:
+          type: string
+          example: "Interview notes and feedback..."
+        isWithdrawn:
+          type: boolean
+          example: false
+        withdrawnAt:
+          type: string
+          format: date-time
+        withdrawnReason:
+          type: string
+          example: "Accepted another position"
+        createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        teacher:
+          $ref: "#/components/schemas/TeacherInfo"
+
+    # Teacher Information Schema
+    TeacherInfo:
+      type: object
+      properties:
+        fullName:
+          type: string
+          example: "John Doe"
+          description: "Teacher's full name"
+        email:
+          type: string
+          format: email
+          example: "john.doe@example.com"
+          description: "Teacher's email address"
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: "United States"
+            city:
+              type: string
+              example: "New York"
+            province:
+              type: string
+              example: "NY"
+            address:
+              type: string
+              example: "123 Main Street"
+            zipCode:
+              type: string
+              example: "10001"
+        phoneNumber:
+          type: string
+          example: "+1234567890"
+          description: "Teacher's phone number"
+        qualification:
+          type: string
+          enum: ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"]
+          example: "Master"
+          description: "Teacher's highest qualification"
+        subject:
+          type: string
+          example: "Mathematics"
+          description: "Subject the teacher specializes in"
+        yearsOfTeachingExperience:
+          type: number
+          example: 5
+          description: "Years of teaching experience"
 
     # Pagination Schema
     Pagination:
@@ -802,6 +896,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change user password
+      description: Change the authenticated user's password. Requires current password verification.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+                - confirmPassword
+              properties:
+                currentPassword:
+                  type: string
+                  description: User's current password
+                  example: "currentPassword123"
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: New password (must meet complexity requirements)
+                  example: "newPassword123!"
+                confirmPassword:
+                  type: string
+                  description: Confirmation of new password
+                  example: "newPassword123!"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password changed successfully. Please login again with your new password."
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid current password or token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /users/complete-profile:
     post:
       tags:
@@ -848,7 +1007,7 @@ paths:
       tags:
         - Users
       summary: Get current user profile
-      description: Retrieve the current user's complete profile
+      description: Retrieve the current user's complete profile including associated role-specific profile data
       security:
         - BearerAuth: []
       responses:
@@ -857,7 +1016,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      profile:
+                        oneOf:
+                          - $ref: "#/components/schemas/TeacherProfile"
+                          - $ref: "#/components/schemas/SchoolProfile"
+                          - type: "null"
+                        description: "Role-specific profile data (TeacherProfile for teachers, SchoolProfile for schools, null for other roles)"
         "401":
           description: Unauthorized
           content:
@@ -934,7 +1111,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User profile retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      profile:
+                        oneOf:
+                          - $ref: "#/components/schemas/TeacherProfile"
+                          - $ref: "#/components/schemas/SchoolProfile"
+                          - type: "null"
+                        description: "Role-specific profile data (TeacherProfile for teachers, SchoolProfile for schools, null for other roles)"
         "404":
           description: User not found
           content:
@@ -2882,7 +3077,16 @@ paths:
           description: Sort field
           schema:
             type: string
-            enum: ["createdAt", "updatedAt", "status", "applicantId"]
+            enum:
+              [
+                "createdAt",
+                "updatedAt",
+                "status",
+                "teacherName",
+                "appliedAt",
+                "expectedSalary",
+                "availableFrom",
+              ]
             default: "createdAt"
         - name: sortOrder
           in: query
@@ -3050,7 +3254,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Avatar uploaded successfully"
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl:
+                        type: string
+                        format: uri
+                        example: "https://res.cloudinary.com/example/image/upload/v123/avatars/filename.jpg"
         "400":
           description: Bad request - invalid file
           content:
@@ -3608,6 +3826,292 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden - school role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/applications/school/all:
+    get:
+      tags:
+        - Applications
+      summary: Get all applications by school
+      description: Get all applications from all jobs posted by the authenticated school
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "pending",
+                "reviewing",
+                "shortlisted",
+                "interviewed",
+                "accepted",
+                "rejected",
+                "withdrawn",
+              ]
+            default: "all"
+      responses:
+        "200":
+          description: All school applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All school applications retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      applications:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: string
+                              example: "507f1f77bcf86cd799439011"
+                            status:
+                              type: string
+                              example: "pending"
+                            coverLetter:
+                              type: string
+                              example: "I am interested in this position..."
+                            expectedSalary:
+                              type: number
+                              example: 50000
+                            availableFrom:
+                              type: string
+                              format: date-time
+                              example: "2024-01-01T00:00:00.000Z"
+                            reasonForApplying:
+                              type: string
+                              example: "Great opportunity to grow..."
+                            createdAt:
+                              type: string
+                              format: date-time
+                              example: "2024-01-01T00:00:00.000Z"
+                            job:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "507f1f77bcf86cd799439012"
+                                title:
+                                  type: string
+                                  example: "Mathematics Teacher"
+                                status:
+                                  type: string
+                                  example: "active"
+                                city:
+                                  type: string
+                                  example: "New York"
+                                country:
+                                  type: string
+                                  example: "USA"
+                                positionCategory:
+                                  type: string
+                                  example: "Teaching"
+                                educationLevel:
+                                  type: string
+                                  example: "High School"
+                                jobType:
+                                  type: string
+                                  example: "Full-time"
+                                isUrgent:
+                                  type: boolean
+                                  example: false
+                            teacher:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "507f1f77bcf86cd799439013"
+                                fullName:
+                                  type: string
+                                  example: "John Doe"
+                                country:
+                                  type: string
+                                  example: "USA"
+                                city:
+                                  type: string
+                                  example: "New York"
+                                experience:
+                                  type: string
+                                  example: "5 years"
+                                subjects:
+                                  type: array
+                                  items:
+                                    type: string
+                                  example: ["Mathematics", "Physics"]
+                                qualifications:
+                                  type: array
+                                  items:
+                                    type: string
+                                  example: ["Master's Degree"]
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          total:
+                            type: integer
+                            example: 30
+                          totalPages:
+                            type: integer
+                            example: 3
+                          hasNextPage:
+                            type: boolean
+                            example: true
+                          hasPrevPage:
+                            type: boolean
+                            example: false
+                      summary:
+                        type: object
+                        properties:
+                          totalApplications:
+                            type: integer
+                            example: 30
+                            description: Total applications across all jobs
+                          totalJobs:
+                            type: integer
+                            example: 3
+                            description: Total jobs posted by the school
+                          applicationsByStatus:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                  example: "pending"
+                                count:
+                                  type: integer
+                                  example: 15
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - school role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /jobs/applications/school/job/{jobId}:
+    get:
+      tags:
+        - Applications
+      summary: Get applications by specific job for school
+      description: Get all applications for a specific job with school ownership verification
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: Job ID
+          schema:
+            type: string
+            example: "507f1f77bcf86cd799439011"
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              [
+                "all",
+                "pending",
+                "reviewing",
+                "shortlisted",
+                "interviewed",
+                "accepted",
+                "rejected",
+                "withdrawn",
+              ]
+            default: "all"
+      responses:
+        "200":
+          description: Job applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - school role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Job not found or access denied
           content:
             application/json:
               schema:
@@ -6188,7 +6692,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/SuccessResponse"
         "400":
           description: Bad request - validation error
           content:

@@ -81,6 +81,27 @@ router.get(
   ApplicationController.getOverdueApplications
 );
 
+router.get(
+  "/applications/school/all",
+  authenticate,
+  authorize(["school"]),
+  ApplicationController.getAllApplicationsBySchool
+);
+
+router.get(
+  "/applications/school/job/:jobId",
+  authenticate,
+  authorize(["school"]),
+  ApplicationController.getApplicationsByJobForSchool
+);
+
+router.get(
+  "/applications/my-applications",
+  authenticate,
+  authorize(["teacher"]),
+  ApplicationController.getMyApplications
+);
+
 router.patch(
   "/applications/bulk/status",
   authenticate,

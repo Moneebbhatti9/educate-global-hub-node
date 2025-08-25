@@ -235,7 +235,10 @@ class JobService {
       const skip = (page - 1) * limit;
 
       // Build query
-      const query = { status: "published" };
+      const query = {
+        status: "published",
+        applicationDeadline: { $gt: new Date() },
+      };
 
       // Text search
       if (filters.q) {
