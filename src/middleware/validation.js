@@ -415,7 +415,7 @@ const validationSchemas = {
         "array.min": "At least one age group must be selected",
         "any.required": "Age group is required",
       }),
-    schoolWebsite: Joi.string().uri().optional().messages({
+    schoolWebsite: Joi.string().uri().allow("", null).optional().messages({
       "string.uri": "Please provide a valid website URL",
     }),
     aboutSchool: Joi.string().min(100).max(2000).required().messages({
