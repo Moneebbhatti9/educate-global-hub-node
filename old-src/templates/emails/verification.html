@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - Educate Global Hub</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .greeting {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .description {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .otp-code {
+            background: #fff;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        .otp-code h1 {
+            font-size: 36px;
+            color: #667eea;
+            margin: 0;
+            letter-spacing: 8px;
+            font-weight: bold;
+        }
+
+        .otp-code p {
+            color: #999;
+            margin: 10px 0 0 0;
+            font-size: 14px;
+        }
+
+        .expiry-notice {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .security-tip {
+            background: #e8f4fd;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 25px 0;
+        }
+
+        .security-tip p {
+            margin: 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .signature {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 0;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 12px;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Educate Global Hub</h1>
+            <p>Welcome to the future of education</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <h2 class="greeting">Welcome, {{userName}}! 👋</h2>
+
+            <p class="description">
+                Thank you for joining Educate Global Hub. To complete your registration and start your educational
+                journey,
+                please verify your email address using the verification code below:
+            </p>
+
+            <!-- OTP Code -->
+            <div class="otp-code">
+                <h1>{{otp}}</h1>
+                <p>Verification Code</p>
+            </div>
+
+            <p class="expiry-notice">
+                This code will expire in <strong>5 minutes</strong>. If you didn't create an account with us,
+                please ignore this email.
+            </p>
+
+            <!-- Security Tip -->
+            <div class="security-tip">
+                <p>
+                    <strong>Security Tip:</strong> Never share this verification code with anyone.
+                    Our team will never ask for this code via phone or email.
+                </p>
+            </div>
+
+            <p class="signature">
+                Best regards,<br>
+                <strong>The Educate Global Hub Team</strong>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2024 Educate Global Hub. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>
