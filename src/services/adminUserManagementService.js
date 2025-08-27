@@ -149,7 +149,7 @@ class AdminUserManagementService {
       country,
       city,
       province,
-      zipCode,
+      postalCode,
       address,
       qualification,
       subject,
@@ -214,22 +214,47 @@ class AdminUserManagementService {
     if (role === "teacher") {
       const teacherProfile = new TeacherProfile({
         userId: user._id,
-        fullName: `${firstName} ${lastName}`,
+
+        // --- Required Personal/Contact ---
+        firstName,
+        lastName,
+        professionalTitle: userData.professionalTitle || "",
+        email, // required now
         phoneNumber: phoneNumber || "",
-        country: country || "",
+        alternatePhone: userData.alternatePhone || "",
+
+        dateOfBirth: userData.dateOfBirth || null,
+        placeOfBirth: userData.placeOfBirth || "",
+        nationality: userData.nationality || "",
+        passportNumber: userData.passportNumber || "",
+        gender: userData.gender || undefined,
+        maritalStatus: userData.maritalStatus || undefined,
+
+        // --- Address (all required now) ---
+        streetAddress: userData.streetAddress || address || "",
         city: city || "",
-        province: province || "",
-        zipCode: zipCode || "",
-        address: address || "",
+        stateProvince: userData.stateProvince || province || "",
+        country: country || "",
+        postalCode: userData.postalCode || postalCode || "",
+
+        linkedin: userData.linkedin || "",
+
+        // --- Professional ---
         qualification: qualification || "Bachelor",
         subject: subject || "",
         pgce: pgce || false,
         yearsOfTeachingExperience: yearsOfTeachingExperience || 0,
         professionalBio: professionalBio || "",
+
         keyAchievements: keyAchievements || [],
         certifications: certifications || [],
         additionalQualifications: additionalQualifications || [],
+
+        // Legacy fields (still required by schema)
+        province: userData.stateProvince || province || "",
+        address: userData.streetAddress || address || "",
       });
+
       await teacherProfile.save();
     } else if (role === "school") {
       const schoolProfile = new SchoolProfile({
@@ -237,11 +262,14 @@ class AdminUserManagementService {
         schoolName: schoolName || "",
         schoolEmail: schoolEmail || email,
         schoolContactNumber: schoolContactNumber || "",
-        country: country || "",
+
+        // --- Address ---
+        streetAddress: userData.streetAddress || address || "",
         city: city || "",
-        province: province || "",
-        zipCode: zipCode || "",
-        address: address || "",
+        stateProvince: userData.stateProvince || province || "",
+        country: country || "",
+        postalCode: userData.postalCode || postalCode || "",
+
         curriculum: curriculum || [],
         schoolSize: schoolSize || "Small (1-500 students)",
         schoolType: schoolType || "Public",
@@ -250,6 +278,7 @@ class AdminUserManagementService {
         schoolWebsite: schoolWebsite || "",
         aboutSchool: aboutSchool || "",
       });
+
       await schoolProfile.save();
     }
 
