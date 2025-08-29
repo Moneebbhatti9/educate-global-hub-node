@@ -17,7 +17,7 @@ const TeacherMembership = require("../models/TeacherMembership");
 async function computeProfileCompletion(teacherProfileDoc) {
   const corePct = Math.min(
     70,
-    Math.round((teacherProfileDoc.checkProfileCompletion() / 100) * 70)
+    Math.round(((await teacherProfileDoc.checkProfileCompletion()) / 100) * 70)
   );
 
   const [
@@ -47,8 +47,8 @@ async function computeProfileCompletion(teacherProfileDoc) {
     (certificationCount > 0 ? 6 : 0) +
     (developmentCount > 0 ? 6 : 0) +
     (membershipCount > 0 ? 3 : 0) +
-    (refereeCount > 0 ? 3 : 0) 
-    // (additionalDoc ? 4 : 0);
+    (refereeCount > 0 ? 3 : 0);
+  // (additionalDoc ? 4 : 0);
 
   return Math.min(100, corePct + extra);
 }

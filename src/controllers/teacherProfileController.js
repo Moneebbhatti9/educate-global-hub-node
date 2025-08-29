@@ -300,9 +300,18 @@ const getTeacherProfile = async (req, res) => {
       teacherProfile.profileCompletion !== completion ||
       teacherProfile.isProfileComplete !== (completion === 100)
     ) {
+      // Update only the completion fields without triggering full validation
+      await TeacherProfile.findByIdAndUpdate(
+        teacherProfile._id,
+        {
+          profileCompletion: completion,
+          isProfileComplete: completion === 100,
+        },
+        { new: true }
+      );
+      // Update the local object for response
       teacherProfile.profileCompletion = completion;
       teacherProfile.isProfileComplete = completion === 100;
-      await teacherProfile.save();
     }
     return successResponse(res, "Teacher profile retrieved successfully", {
       data: {
@@ -705,9 +714,16 @@ const addCertification = async (req, res) => {
 
     // recompute completion
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification added", { data: created });
   } catch (err) {
@@ -732,9 +748,16 @@ const updateCertification = async (req, res) => {
     if (!updated) return errorResponse(res, "Certification not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification updated", { data: updated });
   } catch (err) {
@@ -758,9 +781,16 @@ const deleteCertification = async (req, res) => {
     if (!deleted) return errorResponse(res, "Certification not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification deleted", { data: deleted });
   } catch (err) {
@@ -798,9 +828,16 @@ const addDevelopment = async (req, res) => {
     const created = await TeacherDevelopment.create(payload);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development added", { data: created });
   } catch (err) {
@@ -826,9 +863,16 @@ const updateDevelopment = async (req, res) => {
       return errorResponse(res, "Development record not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development updated", { data: updated });
   } catch (err) {
@@ -853,9 +897,16 @@ const deleteDevelopment = async (req, res) => {
       return errorResponse(res, "Development record not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development deleted", { data: deleted });
   } catch (err) {
@@ -891,9 +942,16 @@ const addMembership = async (req, res) => {
     const created = await TeacherMembership.create(payload);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership added", { data: created });
   } catch (err) {
@@ -918,9 +976,16 @@ const updateMembership = async (req, res) => {
     if (!updated) return errorResponse(res, "Membership not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership updated", { data: updated });
   } catch (err) {
@@ -944,9 +1009,16 @@ const deleteMembership = async (req, res) => {
     if (!deleted) return errorResponse(res, "Membership not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership deleted", { data: deleted });
   } catch (err) {
