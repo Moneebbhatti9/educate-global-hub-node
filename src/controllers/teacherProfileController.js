@@ -18,6 +18,7 @@ const {
 const {
   computeProfileCompletion,
 } = require("../services/profileCompletionService");
+const { getTeacherProfileForUser } = require("../utils/getTeacherprofile");
 // Create or update teacher profile
 const createOrUpdateTeacherProfile = async (req, res) => {
   try {
