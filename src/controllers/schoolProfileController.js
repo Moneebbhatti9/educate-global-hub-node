@@ -148,9 +148,18 @@ const getSchoolProfile = async (req, res) => {
     if (!schoolProfile) {
       return errorResponse(res, "School profile not found", 404);
     }
-
+    const [programs, media] = await Promise.all([
+      SchoolProgram.find({ schoolId: schoolProfile._id }).sort({
+        createdAt: -1,
+      }),
+      SchoolMedia.find({ schoolId: schoolProfile._id }).sort({ createdAt: -1 }),
+    ]);
     return successResponse(res, "School profile retrieved successfully", {
-      data: schoolProfile,
+      data: {
+        ...schoolProfile.toObject(),
+        programs,
+        media,
+      },
     });
   } catch (error) {
     console.error("Error in getSchoolProfile:", error);
