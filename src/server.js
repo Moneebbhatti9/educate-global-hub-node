@@ -21,6 +21,8 @@ const schoolProfileRoutes = require("./routes/schoolProfile");
 const jobRoutes = require("./routes/jobs");
 const notificationRoutes = require("./routes/notification");
 const adminRoutes = require("./routes/admin");
+const teacherDashboardRoutes = require("./routes/teacherDasboard");
+const schoolDashboardRoutes = require("./routes/schoolDashboard");
 const {
   applyMiddlewares,
   applyErrorMdiddlewares,
@@ -118,6 +120,8 @@ app.use(`/api/${apiVersion}/school-profiles`, schoolProfileRoutes);
 app.use(`/api/${apiVersion}/jobs`, jobRoutes);
 app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 app.use(`/api/${apiVersion}/admin`, adminRoutes);
+app.use(`/api/${apiVersion}/teacherDashboard`, teacherDashboardRoutes);
+app.use(`/api/${apiVersion}/schoolDashboard`, schoolDashboardRoutes);
 
 applyErrorMiddlewares(app);
 
