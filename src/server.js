@@ -23,9 +23,10 @@ const notificationRoutes = require("./routes/notification");
 const adminRoutes = require("./routes/admin");
 const teacherDashboardRoutes = require("./routes/teacherDasboard");
 const schoolDashboardRoutes = require("./routes/schoolDashboard");
+const adminDashboardRoutes = require("./routes/adminDashboard");
+
 const {
   applyMiddlewares,
-  applyErrorMdiddlewares,
   applyErrorMiddlewares,
 } = require("./middleware");
 
@@ -122,6 +123,7 @@ app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 app.use(`/api/${apiVersion}/admin`, adminRoutes);
 app.use(`/api/${apiVersion}/teacherDashboard`, teacherDashboardRoutes);
 app.use(`/api/${apiVersion}/schoolDashboard`, schoolDashboardRoutes);
+app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
 
 applyErrorMiddlewares(app);
 
