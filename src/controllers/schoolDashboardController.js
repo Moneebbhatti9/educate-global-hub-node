@@ -30,7 +30,7 @@ const getSchoolDashboard = async (req, res) => {
         ? ((hiredApplicants / totalApplicants) * 100).toFixed(2)
         : 0;
 
-    return successResponse(res, "School dashboard data", {
+    return successResponse(res, {
       totalJobs,
       activeJobs,
       totalApplicants,

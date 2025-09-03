@@ -1,4 +1,5 @@
 const JobApplication = require("../models/JobApplication");
+const { errorResponse, successResponse } = require("../utils/response");
 
 const getTeacherDashboard = async (req, res) => {
   try {
@@ -8,6 +9,8 @@ const getTeacherDashboard = async (req, res) => {
     const applicationsCount = await JobApplication.countDocuments({
       userId,
     });
+
+    console.log("application counts", applicationsCount);
 
     // Get 5 most recent applications
     const recentApplications = await JobApplication.find({ userId })
@@ -23,24 +26,17 @@ const getTeacherDashboard = async (req, res) => {
       })
       .lean();
 
-    return res.json({
-      success: true,
-      data: {
-        cards: {
-          applicationsSent: applicationsCount,
-          resourcesUploaded: 12, // static for now
-          resourcesDownloaded: 34, // static for now
-          earnings: 120.5, // static for now
-        },
-        recentApplications,
+    return successResponse(res, {
+      cards: {
+        applicationsSent: applicationsCount,
+        resourcesUploaded: 12, // static for now
+        resourcesDownloaded: 34, // static for now
+        earnings: 120.5, // static for now
       },
+      recentApplications,
     });
   } catch (err) {
-    console.error("Dashboard fetch error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to load dashboard data",
-    });
+    return errorResponse(res, "Failed to fetch dashboard data", err.message);
   }
 };
 
