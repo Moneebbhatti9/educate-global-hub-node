@@ -1004,6 +1004,71 @@ class ApplicationService {
 
     return sanitized;
   }
+  /**
+   * Get recent applications for a school (latest N applications)
+   */
+  static async getRecentApplications(schoolId, limit = 5) {
+    try {
+      const recentApplications = await JobApplication.find()
+        .populate("jobId", "title status")
+        .populate(
+          "teacherId",
+          "fullName email country city experience subjects"
+        )
+        .where("schoolId")
+        .equals(schoolId)
+        .sort({ createdAt: -1 })
+        .limit(Number(limit)) // Ensure it's a number
+        .lean();
+
+      return recentApplications.map((app) =>
+        this.sanitizeApplicationForSchool(app)
+      );
+    } catch (error) {
+      throw new Error(`Failed to get recent applications: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get summarized application statistics for a school
+   */
+  static async getApplicationStats(schoolId) {
+    try {
+      // 1. Total Jobs posted by this school
+      const totalJobs = await Job.countDocuments({ schoolId });
+
+      // 2. Active Jobs
+      const activeJobs = await Job.countDocuments({
+        schoolId,
+        status: "active",
+      });
+
+      // 3. Total Applications
+      const totalApplicants = await JobApplication.countDocuments({ schoolId });
+
+      // 4. Hired Applicants
+      const hiredApplicants = await JobApplication.countDocuments({
+        schoolId,
+        status: "hired",
+      });
+
+      // 5. Hiring Ratio
+      const hiringRatio =
+        totalApplicants > 0
+          ? ((hiredApplicants / totalApplicants) * 100).toFixed(2)
+          : 0;
+
+      return {
+        totalJobs,
+        activeJobs,
+        totalApplicants,
+        hiredApplicants,
+        hiringRatio,
+      };
+    } catch (error) {
+      throw new Error(`Failed to get application stats: ${error.message}`);
+    }
+  }
 }
 
 module.exports = ApplicationService;

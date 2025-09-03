@@ -283,7 +283,7 @@ const getFallbackJobs = async (limit = 5) => {
           isUrgent: 1,
           isFeatured: 1,
           publishedAt: 1,
-          matchScore: 0,
+          matchScore: { $literal: 0 }, 
           "school.name": 1,
           "school.logo": 1,
           "school.website": 1,
