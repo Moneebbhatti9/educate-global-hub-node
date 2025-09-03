@@ -154,13 +154,11 @@ const getSchoolProfile = async (req, res) => {
       }),
       SchoolMedia.find({ schoolId: schoolProfile._id }).sort({ createdAt: -1 }),
     ]);
-    return successResponse(res, "School profile retrieved successfully", {
-      data: {
-        ...schoolProfile.toObject(),
-        programs,
-        media,
-      },
-    });
+    return successResponse(res, {
+      ...schoolProfile.toObject(),
+      programs,
+      media,
+    }, "School profile retrieved successfully");
   } catch (error) {
     console.error("Error in getSchoolProfile:", error);
     return errorResponse(res, "Failed to retrieve school profile", 500);
