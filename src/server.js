@@ -7,6 +7,7 @@ const morgan = require("morgan");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 const slowDown = require("express-slow-down");
+const socketIo = require("socket.io");
 
 const { connectDB } = require("./config/database");
 const { errorHandler } = require("./middleware/errorHandler");
@@ -24,11 +25,10 @@ const adminRoutes = require("./routes/admin");
 const teacherDashboardRoutes = require("./routes/teacherDasboard");
 const schoolDashboardRoutes = require("./routes/schoolDashboard");
 const adminDashboardRoutes = require("./routes/adminDashboard");
+const discussionRoutes = require("./routes/discussion");
+const replyRoutes = require("./routes/reply");
 
-const {
-  applyMiddlewares,
-  applyErrorMiddlewares,
-} = require("./middleware");
+const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -124,15 +124,36 @@ app.use(`/api/${apiVersion}/admin`, adminRoutes);
 app.use(`/api/${apiVersion}/teacherDashboard`, teacherDashboardRoutes);
 app.use(`/api/${apiVersion}/schoolDashboard`, schoolDashboardRoutes);
 app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
+app.use(`/api/${apiVersion}/discussion`, discussionRoutes);
+app.use(`/api/${apiVersion}/reply`, replyRoutes);
 
-applyErrorMiddlewares(app);
-
-// Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api/${apiVersion}`);
 });
+
+const io = socketIo(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log(` New client connected: ${socket.id}`);
+
+  socket.on("disconnect", () => {
+    console.log(` Client disconnected: ${socket.id}`);
+  });
+});
+
+// make io accessible to controllers
+app.set("io", io);
+
+applyErrorMiddlewares(app);
+
+// Start server
 
 // Graceful shutdown
 process.on("SIGTERM", () => {
