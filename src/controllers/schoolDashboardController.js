@@ -76,7 +76,7 @@ const getRecentCandidates = async (req, res) => {
         },
       })
       .lean();
-    
+
     const candidates = applications.map((app) => {
       const teacher = app.teacherId;
       const user = teacher?.userId;
@@ -95,9 +95,7 @@ const getRecentCandidates = async (req, res) => {
       };
     });
 
-    return successResponse(res, "Recent candidates fetched", {
-      data: candidates,
-    });
+    return successResponse(res, candidates, "Recent candidates fetched", 200);
   } catch (err) {
     console.error("getRecentCandidates error:", err);
     return errorResponse(res, "Failed to fetch recent candidates", 500);
