@@ -279,9 +279,9 @@ const addProgram = async (req, res) => {
       isActive,
     });
 
-    return successResponse(res, "Program added successfully", {
+    return successResponse(res,  {
       data: program,
-    });
+    },"Program added successfully");
   } catch (err) {
     console.error("addProgram:", err);
     return errorResponse(res, "Failed to add program", 500);
