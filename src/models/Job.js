@@ -184,7 +184,7 @@ const jobSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "published", "expired", "closed"],
+      enum: ["draft", "published", "expired", "closed" , "deleted"],
       default: "draft",
     },
     viewsCount: {

@@ -148,10 +148,17 @@ const getSchoolProfile = async (req, res) => {
     if (!schoolProfile) {
       return errorResponse(res, "School profile not found", 404);
     }
-
-    return successResponse(res, "School profile retrieved successfully", {
-      data: schoolProfile,
-    });
+    const [programs, media] = await Promise.all([
+      SchoolProgram.find({ schoolId: schoolProfile._id }).sort({
+        createdAt: -1,
+      }),
+      SchoolMedia.find({ schoolId: schoolProfile._id }).sort({ createdAt: -1 }),
+    ]);
+    return successResponse(res, {
+      ...schoolProfile.toObject(),
+      programs,
+      media,
+    }, "School profile retrieved successfully");
   } catch (error) {
     console.error("Error in getSchoolProfile:", error);
     return errorResponse(res, "Failed to retrieve school profile", 500);
@@ -241,15 +248,40 @@ const addProgram = async (req, res) => {
     const schoolId = await getMySchoolId(req.user.userId);
     if (!schoolId) return errorResponse(res, "School profile not found", 404);
 
+    // Pick only program fields
+    const {
+      programName,
+      educationLevel,
+      curriculum,
+      ageRange,
+      programDuration,
+      classCapacity,
+      coreSubjects,
+      description,
+      admissionRequirements,
+      programFees,
+      isActive,
+    } = req.body;
+
     const program = await SchoolProgram.create({
       schoolId,
       createdBy: req.user.userId,
-      ...req.body,
+      programName,
+      educationLevel,
+      curriculum,
+      ageRange,
+      programDuration,
+      classCapacity,
+      coreSubjects,
+      description,
+      admissionRequirements,
+      programFees,
+      isActive,
     });
 
-    return successResponse(res, "Program added successfully", {
+    return successResponse(res,  {
       data: program,
-    });
+    },"Program added successfully");
   } catch (err) {
     console.error("addProgram:", err);
     return errorResponse(res, "Failed to add program", 500);
@@ -269,7 +301,33 @@ const updateProgram = async (req, res) => {
     });
     if (!owns) return errorResponse(res, "Forbidden", 403);
 
-    Object.assign(program, req.body);
+    const {
+      programName,
+      educationLevel,
+      curriculum,
+      ageRange,
+      programDuration,
+      classCapacity,
+      coreSubjects,
+      description,
+      admissionRequirements,
+      programFees,
+      isActive,
+    } = req.body;
+
+    Object.assign(program, {
+      programName,
+      educationLevel,
+      curriculum,
+      ageRange,
+      programDuration,
+      classCapacity,
+      coreSubjects,
+      description,
+      admissionRequirements,
+      programFees,
+      isActive,
+    });
     await program.save();
 
     return successResponse(res, "Program updated successfully", {
@@ -345,30 +403,30 @@ const addSchoolMedia = async (req, res) => {
     if (!req.files || req.files.length === 0)
       return errorResponse(res, "No files uploaded", 400);
 
-    const uploadedMedia = [];
-    for (const file of req.files) {
-      const result = await uploadImage(
-        `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
-        `educate-hub/schools/${schoolProfile._id}`
-      );
-      if (!result.success) continue;
+    const uploadedMedia = await Promise.all(
+      req.files.map(async (file) => {
+        const result = await uploadImage(
+          `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
+          `educate-hub/schools/${schoolProfile._id}`
+        );
+        if (!result.success) return null;
 
-      const media = await SchoolMedia.create({
-        schoolId: schoolProfile._id,
-        url: result.url,
-        publicId: result.public_id,
-        mediaType: "image",
-        uploadedBy: userId,
-        width: result.width,
-        height: result.height,
-        size: result.size,
-        format: result.format,
-      });
-      uploadedMedia.push(media);
-    }
+        return await SchoolMedia.create({
+          schoolId: schoolProfile._id,
+          url: result.url,
+          publicId: result.public_id,
+          mediaType: file.mimetype.startsWith("image") ? "image" : "other",
+          uploadedBy: userId,
+          width: result.width,
+          height: result.height,
+          size: result.size,
+          format: result.format,
+        });
+      })
+    );
 
     return successResponse(res, "Media uploaded successfully", {
-      files: uploadedMedia,
+      files: uploadedMedia.filter(Boolean),
     });
   } catch (err) {
     console.error("addSchoolMedia error:", err);
