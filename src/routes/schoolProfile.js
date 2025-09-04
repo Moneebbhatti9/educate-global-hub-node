@@ -5,6 +5,7 @@ const { authenticateToken } = require("../middleware/auth");
 const { validate } = require("../middleware/validation");
 const {
   createOrUpdateSchoolProfile,
+  updateSchoolProfile,
   getSchoolProfile,
   getSchoolProfileById,
   searchSchools,
@@ -35,6 +36,9 @@ router.post(
   validate("schoolProfile"),
   createOrUpdateSchoolProfile
 );
+
+// Update school profile (PATCH method for partial updates)
+router.patch("/updateSchoolProfile", authenticateToken, updateSchoolProfile);
 
 // Get current user's school profile (requires authentication)
 router.get("/me", authenticateToken, getSchoolProfile);

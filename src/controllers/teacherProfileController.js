@@ -19,6 +19,96 @@ const {
   computeProfileCompletion,
 } = require("../services/profileCompletionService");
 const { getTeacherProfileForUser } = require("../utils/getTeacherprofile");
+
+// Update teacher profile (PATCH method for partial updates)
+const updateTeacherProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updateData = req.body;
+
+    // Check if user exists and is a teacher
+    const user = await User.findById(userId);
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "teacher")
+      return errorResponse(
+        res,
+        "Only teachers can update teacher profiles",
+        403
+      );
+
+    // Check if profile exists
+    const existingProfile = await TeacherProfile.findOne({ userId });
+    if (!existingProfile) {
+      return errorResponse(
+        res,
+        "Teacher profile not found. Please create a profile first.",
+        404
+      );
+    }
+
+    // Handle phone number validation if provided
+    if (updateData.phoneNumber) {
+      const countryForPhone = updateData.country || existingProfile.country;
+      const phoneValidation = validateAndFormatPhone(
+        updateData.phoneNumber,
+        countryForPhone
+      );
+      if (!phoneValidation.isValid) {
+        return errorResponse(res, phoneValidation.error, 400);
+      }
+      updateData.phoneNumber = phoneValidation.formatted;
+    }
+
+    // Handle alternate phone validation if provided
+    if (updateData.alternatePhone) {
+      const countryForPhone = updateData.country || existingProfile.country;
+      const altVal = validateAndFormatPhone(
+        updateData.alternatePhone,
+        countryForPhone
+      );
+      if (!altVal.isValid) {
+        return errorResponse(res, `Alternate phone: ${altVal.error}`, 400);
+      }
+      updateData.alternatePhone = altVal.formatted;
+    }
+
+    // Handle date of birth validation if provided
+    if (updateData.dateOfBirth) {
+      const dob = new Date(updateData.dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        return errorResponse(
+          res,
+          "Invalid dateOfBirth. Use YYYY-MM-DD or ISO date.",
+          400
+        );
+      }
+      updateData.dateOfBirth = dob;
+    }
+
+    // Update the profile
+    const updatedProfile = await TeacherProfile.findOneAndUpdate(
+      { userId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    // Recalculate profile completion
+    const completionPercentage = await computeProfileCompletion(userId);
+    updatedProfile.profileCompletion = completionPercentage;
+    updatedProfile.isProfileComplete = completionPercentage >= 80;
+    await updatedProfile.save();
+
+    return successResponse(
+      res,
+      "Teacher profile updated successfully",
+      updatedProfile
+    );
+  } catch (error) {
+    console.error("Error updating teacher profile:", error);
+    return errorResponse(res, "Failed to update teacher profile", 500);
+  }
+};
+
 // Create or update teacher profile
 const createOrUpdateTeacherProfile = async (req, res) => {
   try {
@@ -1131,6 +1221,7 @@ const deleteActivity = async (req, res) => {
 
 module.exports = {
   createOrUpdateTeacherProfile,
+  updateTeacherProfile,
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,

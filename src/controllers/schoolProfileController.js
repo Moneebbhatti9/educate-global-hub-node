@@ -6,6 +6,80 @@ const { successResponse, errorResponse } = require("../utils/response");
 const { validateAndFormatPhone } = require("../utils/phoneUtils");
 const { uploadImage, deleteImage } = require("../config/cloudinary");
 
+// Update school profile (PATCH method for partial updates)
+const updateSchoolProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updateData = req.body;
+
+    // Check if user exists and is a school
+    const user = await User.findById(userId);
+    if (!user) {
+      return errorResponse(res, "User not found", 404);
+    }
+
+    if (user.role !== "school") {
+      return errorResponse(res, "Only schools can update school profiles", 403);
+    }
+
+    // Check if profile exists
+    const existingProfile = await SchoolProfile.findOne({ userId });
+    if (!existingProfile) {
+      return errorResponse(
+        res,
+        "School profile not found. Please create a profile first.",
+        404
+      );
+    }
+
+    // Handle phone number validation if provided
+    if (updateData.schoolContactNumber) {
+      const countryForPhone = updateData.country || existingProfile.country;
+      const phoneValidation = validateAndFormatPhone(
+        updateData.schoolContactNumber,
+        countryForPhone
+      );
+      if (!phoneValidation.isValid) {
+        return errorResponse(res, phoneValidation.error, 400);
+      }
+      updateData.schoolContactNumber = phoneValidation.formatted;
+    }
+
+    // Handle alternate phone validation if provided
+    if (updateData.alternateContactNumber) {
+      const countryForPhone = updateData.country || existingProfile.country;
+      const phoneValidationAlt = validateAndFormatPhone(
+        updateData.alternateContactNumber,
+        countryForPhone
+      );
+      if (!phoneValidationAlt.isValid) {
+        return errorResponse(res, phoneValidationAlt.error, 400);
+      }
+      updateData.alternateContactNumber = phoneValidationAlt.formatted;
+    }
+
+    // Update the profile
+    const updatedProfile = await SchoolProfile.findOneAndUpdate(
+      { userId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    // Check profile completion
+    updatedProfile.isProfileComplete = updatedProfile.checkProfileCompletion();
+    await updatedProfile.save();
+
+    return successResponse(
+      res,
+      "School profile updated successfully",
+      updatedProfile
+    );
+  } catch (error) {
+    console.error("Error updating school profile:", error);
+    return errorResponse(res, "Failed to update school profile", 500);
+  }
+};
+
 // Create or update school profile
 const createOrUpdateSchoolProfile = async (req, res) => {
   try {
@@ -154,11 +228,15 @@ const getSchoolProfile = async (req, res) => {
       }),
       SchoolMedia.find({ schoolId: schoolProfile._id }).sort({ createdAt: -1 }),
     ]);
-    return successResponse(res, {
-      ...schoolProfile.toObject(),
-      programs,
-      media,
-    }, "School profile retrieved successfully");
+    return successResponse(
+      res,
+      {
+        ...schoolProfile.toObject(),
+        programs,
+        media,
+      },
+      "School profile retrieved successfully"
+    );
   } catch (error) {
     console.error("Error in getSchoolProfile:", error);
     return errorResponse(res, "Failed to retrieve school profile", 500);
@@ -472,6 +550,7 @@ const deleteSchoolMedia = async (req, res) => {
 
 module.exports = {
   createOrUpdateSchoolProfile,
+  updateSchoolProfile,
   getSchoolProfile,
   getSchoolProfileById,
   searchSchools,
