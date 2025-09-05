@@ -26,7 +26,7 @@ const updateTeacherProfile = async (req, res) => {
     const userId = req.user.userId;
     const updateData = req.body;
 
-    // Check if user exists and is a teacher
+    // Verify user exists and is teacher
     const user = await User.findById(userId);
     if (!user) return errorResponse(res, "User not found", 404);
     if (user.role !== "teacher")
@@ -36,66 +36,51 @@ const updateTeacherProfile = async (req, res) => {
         403
       );
 
-    // Check if profile exists
+    // Check profile exists
     const existingProfile = await TeacherProfile.findOne({ userId });
     if (!existingProfile) {
-      return errorResponse(
-        res,
-        "Teacher profile not found. Please create a profile first.",
-        404
-      );
+      return errorResponse(res, "Teacher profile not found", 404);
     }
 
-    // Handle phone number validation if provided
-    if (updateData.phoneNumber) {
-      const countryForPhone = updateData.country || existingProfile.country;
-      const phoneValidation = validateAndFormatPhone(
+    // Normalize phone fields (schema validates + pre-save formats)
+    if (updateData.phoneNumber && !updateData.phoneNumber.startsWith("+")) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.phoneNumber = formatPhoneNumber(
         updateData.phoneNumber,
-        countryForPhone
+        updateData.country || existingProfile.country
       );
-      if (!phoneValidation.isValid) {
-        return errorResponse(res, phoneValidation.error, 400);
-      }
-      updateData.phoneNumber = phoneValidation.formatted;
     }
-
-    // Handle alternate phone validation if provided
-    if (updateData.alternatePhone) {
-      const countryForPhone = updateData.country || existingProfile.country;
-      const altVal = validateAndFormatPhone(
+    if (
+      updateData.alternatePhone &&
+      !updateData.alternatePhone.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.alternatePhone = formatPhoneNumber(
         updateData.alternatePhone,
-        countryForPhone
+        updateData.country || existingProfile.country
       );
-      if (!altVal.isValid) {
-        return errorResponse(res, `Alternate phone: ${altVal.error}`, 400);
-      }
-      updateData.alternatePhone = altVal.formatted;
     }
 
-    // Handle date of birth validation if provided
+    // Handle DOB parsing if provided
     if (updateData.dateOfBirth) {
       const dob = new Date(updateData.dateOfBirth);
       if (isNaN(dob.getTime())) {
-        return errorResponse(
-          res,
-          "Invalid dateOfBirth. Use YYYY-MM-DD or ISO date.",
-          400
-        );
+        return errorResponse(res, "Invalid dateOfBirth format", 400);
       }
       updateData.dateOfBirth = dob;
     }
 
-    // Update the profile
-    const updatedProfile = await TeacherProfile.findOneAndUpdate(
+    // Update profile
+    let updatedProfile = await TeacherProfile.findOneAndUpdate(
       { userId },
       updateData,
       { new: true, runValidators: true }
     );
 
-    // Recalculate profile completion
-    const completionPercentage = await computeProfileCompletion(userId);
-    updatedProfile.profileCompletion = completionPercentage;
-    updatedProfile.isProfileComplete = completionPercentage >= 80;
+    // Recalculate profile completion (percentage)
+    const completion = await updatedProfile.checkProfileCompletion();
+    updatedProfile.profileCompletion = completion;
+    updatedProfile.isProfileComplete = completion >= 80;
     await updatedProfile.save();
 
     return successResponse(

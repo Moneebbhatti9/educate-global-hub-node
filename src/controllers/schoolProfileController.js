@@ -12,60 +12,48 @@ const updateSchoolProfile = async (req, res) => {
     const userId = req.user.userId;
     const updateData = req.body;
 
-    // Check if user exists and is a school
+    // Verify user exists and is school
     const user = await User.findById(userId);
-    if (!user) {
-      return errorResponse(res, "User not found", 404);
-    }
-
-    if (user.role !== "school") {
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "school")
       return errorResponse(res, "Only schools can update school profiles", 403);
-    }
 
-    // Check if profile exists
+    // Check profile exists
     const existingProfile = await SchoolProfile.findOne({ userId });
     if (!existingProfile) {
-      return errorResponse(
-        res,
-        "School profile not found. Please create a profile first.",
-        404
-      );
+      return errorResponse(res, "School profile not found", 404);
     }
 
-    // Handle phone number validation if provided
-    if (updateData.schoolContactNumber) {
-      const countryForPhone = updateData.country || existingProfile.country;
-      const phoneValidation = validateAndFormatPhone(
+    // Normalize phone fields (schema will validate again on save)
+    if (
+      updateData.schoolContactNumber &&
+      !updateData.schoolContactNumber.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.schoolContactNumber = formatPhoneNumber(
         updateData.schoolContactNumber,
-        countryForPhone
+        updateData.country || existingProfile.country
       );
-      if (!phoneValidation.isValid) {
-        return errorResponse(res, phoneValidation.error, 400);
-      }
-      updateData.schoolContactNumber = phoneValidation.formatted;
     }
-
-    // Handle alternate phone validation if provided
-    if (updateData.alternateContactNumber) {
-      const countryForPhone = updateData.country || existingProfile.country;
-      const phoneValidationAlt = validateAndFormatPhone(
+    if (
+      updateData.alternateContactNumber &&
+      !updateData.alternateContactNumber.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.alternateContactNumber = formatPhoneNumber(
         updateData.alternateContactNumber,
-        countryForPhone
+        updateData.country || existingProfile.country
       );
-      if (!phoneValidationAlt.isValid) {
-        return errorResponse(res, phoneValidationAlt.error, 400);
-      }
-      updateData.alternateContactNumber = phoneValidationAlt.formatted;
     }
 
-    // Update the profile
-    const updatedProfile = await SchoolProfile.findOneAndUpdate(
+    // Apply update
+    let updatedProfile = await SchoolProfile.findOneAndUpdate(
       { userId },
       updateData,
       { new: true, runValidators: true }
     );
 
-    // Check profile completion
+    // Recalculate profile completion (boolean)
     updatedProfile.isProfileComplete = updatedProfile.checkProfileCompletion();
     await updatedProfile.save();
 
@@ -357,9 +345,13 @@ const addProgram = async (req, res) => {
       isActive,
     });
 
-    return successResponse(res,  {
-      data: program,
-    },"Program added successfully");
+    return successResponse(
+      res,
+      {
+        data: program,
+      },
+      "Program added successfully"
+    );
   } catch (err) {
     console.error("addProgram:", err);
     return errorResponse(res, "Failed to add program", 500);

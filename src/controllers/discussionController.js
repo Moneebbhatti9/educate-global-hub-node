@@ -354,3 +354,15 @@ exports.getTrendingTopics = async (req, res) => {
       .json({ success: false, message: "Failed to fetch trending topics" });
   }
 };
+
+/*
+like button for disussion and reply 
+categories api with number discussions and unique users who have created a discussion or replied (it should be unique )
+api to show community with numbers of active users number of discussions and replies 
+
+add pagination to the getDiscussionbyID
+
+related topics api
+user can reply to another reply 
+admin access for this disscusion module 
+*/
