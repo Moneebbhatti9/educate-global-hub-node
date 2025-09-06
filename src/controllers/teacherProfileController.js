@@ -70,23 +70,30 @@ const updateTeacherProfile = async (req, res) => {
       updateData.dateOfBirth = dob;
     }
 
-    // Update profile
+    // Update profile with $set to allow partial updates
     let updatedProfile = await TeacherProfile.findOneAndUpdate(
       { userId },
-      updateData,
-      { new: true, runValidators: true }
+      { $set: updateData },
+      { new: true }
     );
 
-    // Recalculate profile completion (percentage)
+    // Recalculate profile completion (percentage) and update directly
     const completion = await updatedProfile.checkProfileCompletion();
+    await TeacherProfile.findByIdAndUpdate(updatedProfile._id, {
+      $set: {
+        profileCompletion: completion,
+        isProfileComplete: completion >= 80,
+      },
+    });
+
+    // Update the local object for response
     updatedProfile.profileCompletion = completion;
     updatedProfile.isProfileComplete = completion >= 80;
-    await updatedProfile.save();
 
     return successResponse(
       res,
-      "Teacher profile updated successfully",
-      updatedProfile
+      updatedProfile,
+      "Teacher profile updated successfully"
     );
   } catch (error) {
     console.error("Error updating teacher profile:", error);

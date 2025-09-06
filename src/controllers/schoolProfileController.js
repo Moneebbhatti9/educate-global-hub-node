@@ -46,21 +46,28 @@ const updateSchoolProfile = async (req, res) => {
       );
     }
 
-    // Apply update
+    // Apply update with $set to allow partial updates
     let updatedProfile = await SchoolProfile.findOneAndUpdate(
       { userId },
-      updateData,
-      { new: true, runValidators: true }
+      { $set: updateData },
+      { new: true }
     );
 
-    // Recalculate profile completion (boolean)
-    updatedProfile.isProfileComplete = updatedProfile.checkProfileCompletion();
-    await updatedProfile.save();
+    // Recalculate profile completion (boolean) and update directly
+    const isComplete = updatedProfile.checkProfileCompletion();
+    await SchoolProfile.findByIdAndUpdate(updatedProfile._id, {
+      $set: {
+        isProfileComplete: isComplete,
+      },
+    });
+
+    // Update the local object for response
+    updatedProfile.isProfileComplete = isComplete;
 
     return successResponse(
       res,
-      "School profile updated successfully",
-      updatedProfile
+      updatedProfile,
+      "School profile updated successfully"
     );
   } catch (error) {
     console.error("Error updating school profile:", error);
