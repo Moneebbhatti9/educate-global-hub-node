@@ -815,7 +815,8 @@ class ApplicationController {
 
     applications.forEach((application) => {
       const row = [
-        `"${application.teacherId?.fullName || "N/A"}"`,
+        `"${application.teacherId?.firstName || "N/A"}"`,
+        `"${application.teacherId?.lastName || "N/A"}"`,
         `"${application.teacherId?.email || "N/A"}"`,
         `"${application.teacherId?.phoneNumber || "N/A"}"`,
         `"${application.teacherId?.country || "N/A"}"`,

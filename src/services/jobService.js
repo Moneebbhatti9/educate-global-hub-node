@@ -67,7 +67,7 @@ class JobService {
           path: "applications",
           populate: {
             path: "teacherId",
-            select: "fullName email phoneNumber country city",
+            select: "firstName lastName email phoneNumber country city",
           },
         });
       }

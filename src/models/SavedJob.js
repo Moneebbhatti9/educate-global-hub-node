@@ -155,7 +155,7 @@ savedJobSchema.statics.findOverdueReminders = function () {
   return this.find({
     reminderDate: { $lt: new Date() },
   })
-    .populate("teacherId", "email fullName")
+    .populate("teacherId", "email firstName lastName")
     .populate("jobId", "title applicationDeadline");
 };
 
