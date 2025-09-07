@@ -14,6 +14,13 @@ const {
   getCurrentUser,
   changePassword,
 } = require("../controllers/authController");
+const {
+  googleLogin,
+  googleCallback,
+  facebookLogin,
+  facebookCallback,
+  socialLoginAPI,
+} = require("../controllers/socialAuthController");
 
 const router = express.Router();
 
@@ -75,6 +82,33 @@ router.post("/refresh", validate("refresh"), refresh);
 // @desc    Logout user
 // @access  Private
 router.post("/logout", validate("logout"), logout);
+
+// Social Authentication Routes
+
+// @route   GET /api/v1/auth/google
+// @desc    Initiate Google OAuth login
+// @access  Public
+router.get("/google", googleLogin);
+
+// @route   GET /api/v1/auth/google/callback
+// @desc    Google OAuth callback
+// @access  Public
+router.get("/google/callback", googleCallback);
+
+// @route   GET /api/v1/auth/facebook
+// @desc    Initiate Facebook OAuth login
+// @access  Public
+router.get("/facebook", facebookLogin);
+
+// @route   GET /api/v1/auth/facebook/callback
+// @desc    Facebook OAuth callback
+// @access  Public
+router.get("/facebook/callback", facebookCallback);
+
+// @route   POST /api/v1/auth/social-login
+// @desc    Social login via API (for mobile apps)
+// @access  Public
+router.post("/social-login", socialLoginAPI);
 
 // @route   GET /api/v1/auth/me
 // @desc    Get current user

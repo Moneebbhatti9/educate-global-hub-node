@@ -11,6 +11,7 @@ const slowDown = require("express-slow-down");
 const { connectDB } = require("./config/database");
 const { errorHandler } = require("./middleware/errorHandler");
 const { notFoundHandler } = require("./middleware/notFoundHandler");
+const passport = require("./config/passport");
 
 // Import routes
 const authRoutes = require("./routes/auth");
@@ -35,6 +36,9 @@ app.set("trust proxy", 1);
 
 // Connect to MongoDB
 connectDB();
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Security middleware
 app.use(

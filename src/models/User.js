@@ -13,7 +13,10 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: true,
+      required: function () {
+        // Password is required only if user is not using social login
+        return !this.socialAuth || Object.keys(this.socialAuth).length === 0;
+      },
     },
     firstName: {
       type: String,
@@ -62,6 +65,30 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    socialAuth: {
+      google: {
+        id: {
+          type: String,
+          sparse: true,
+        },
+        email: {
+          type: String,
+          lowercase: true,
+          trim: true,
+        },
+      },
+      facebook: {
+        id: {
+          type: String,
+          sparse: true,
+        },
+        email: {
+          type: String,
+          lowercase: true,
+          trim: true,
+        },
+      },
+    },
   },
   {
     timestamps: true,
@@ -74,6 +101,8 @@ userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ isEmailVerified: 1 });
 userSchema.index({ lastActive: 1 });
+userSchema.index({ "socialAuth.google.id": 1 });
+userSchema.index({ "socialAuth.facebook.id": 1 });
 
 // Virtual for full name
 userSchema.virtual("fullName").get(function () {
@@ -98,6 +127,9 @@ userSchema.virtual("schoolProfile", {
 
 // Method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.passwordHash) {
+    return false; // Social login users don't have passwords
+  }
   return bcrypt.compare(candidatePassword, this.passwordHash);
 };
 
