@@ -255,10 +255,7 @@ class JobService {
       }
 
       if (filters.location) {
-        query.$or = [
-          { country: { $regex: filters.location, $options: "i" } },
-          { city: { $regex: filters.location, $options: "i" } },
-        ];
+        query.country = { $regex: filters.location, $options: "i" };
       }
 
       // Salary filters
@@ -274,8 +271,11 @@ class JobService {
       }
 
       // Subjects filter
-      if (filters.subjects && filters.subjects.length > 0) {
-        query.subjects = { $in: filters.subjects };
+      if (filters.subjects) {
+        const subjectsArray = Array.isArray(filters.subjects)
+          ? filters.subjects
+          : [filters.subjects];
+        query.subjects = { $in: subjectsArray };
       }
 
       // Job type filter
