@@ -433,36 +433,41 @@ exports.getRelatedDiscussions = async (req, res) => {
 
 exports.getCategoryStats = async (req, res) => {
   try {
-    const categories = [
-      "Teaching Tips & Strategies",
-      "Curriculum & Resources",
-      "Career Advice",
-      "Help & Support",
-    ];
-
-    const stats = await Promise.all(
-      categories.map(async (category) => {
-        const discussions = await Discussion.find({ category }).select(
-          "_id createdBy"
-        );
-        const discussionIds = discussions.map((d) => d._id);
-
-        const replies = await Reply.find({
-          discussion: { $in: discussionIds },
-        }).select("createdBy");
-
-        const uniqueUsers = new Set([
-          ...discussions.map((d) => d.createdBy.toString()),
-          ...replies.map((r) => r.createdBy.toString()),
-        ]);
-
-        return {
-          category,
-          posts: discussions.length,
-          members: uniqueUsers.size,
-        };
-      })
-    );
+    const stats = await Discussion.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          posts: { $sum: 1 },
+          users: { $addToSet: "$createdBy" },
+          discussionIds: { $addToSet: "$_id" },
+        },
+      },
+      {
+        $lookup: {
+          from: "replies",
+          localField: "discussionIds",
+          foreignField: "discussion",
+          as: "replies",
+        },
+      },
+      {
+        $addFields: {
+          replyUsers: {
+            $map: { input: "$replies", as: "r", in: "$$r.createdBy" },
+          },
+        },
+      },
+      {
+        $project: {
+          category: "$_id",
+          posts: 1,
+          members: {
+            $size: { $setUnion: ["$users", "$replyUsers"] },
+          },
+        },
+      },
+      { $sort: { category: 1 } },
+    ]);
 
     return successResponse(res, stats, "Category stats fetched successfully");
   } catch (err) {
@@ -471,23 +476,43 @@ exports.getCategoryStats = async (req, res) => {
   }
 };
 
+//  Community overview using aggregation
 exports.getCommunityOverview = async (req, res) => {
   try {
     const [discussionAgg, replyAgg] = await Promise.all([
-      Discussion.find().select("createdBy"),
-      Reply.find().select("createdBy"),
+      Discussion.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalDiscussions: { $sum: 1 },
+            discussionUsers: { $addToSet: "$createdBy" },
+          },
+        },
+      ]),
+      Reply.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalReplies: { $sum: 1 },
+            replyUsers: { $addToSet: "$createdBy" },
+          },
+        },
+      ]),
     ]);
 
-    const totalDiscussions = discussionAgg.length;
-    const totalReplies = replyAgg.length;
+    const totalDiscussions = discussionAgg[0]?.totalDiscussions || 0;
+    const totalReplies = replyAgg[0]?.totalReplies || 0;
 
-    const uniqueUsers = new Set([
-      ...discussionAgg.map((d) => d.createdBy.toString()),
-      ...replyAgg.map((r) => r.createdBy.toString()),
-    ]);
+    const discussionUsers = discussionAgg[0]?.discussionUsers || [];
+    const replyUsers = replyAgg[0]?.replyUsers || [];
+
+    const activeMembers = new Set([
+      ...discussionUsers.map((u) => u.toString()),
+      ...replyUsers.map((u) => u.toString()),
+    ]).size;
 
     const overview = {
-      activeMembers: uniqueUsers.size,
+      activeMembers,
       totalDiscussions,
       totalReplies,
     };
@@ -499,6 +524,6 @@ exports.getCommunityOverview = async (req, res) => {
     );
   } catch (err) {
     console.error("getCommunityOverview error:", err);
-    return errorResponse(res, "Failed to fetch community overview", 500);
+    return errorResponse(res, "Failed to fetch community overview");
   }
 };
