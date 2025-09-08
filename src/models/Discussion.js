@@ -21,6 +21,17 @@ const discussionSchema = new mongoose.Schema(
       required: true,
     },
     views: { type: Number, default: 0 }, // track discussion views
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    isPinned: { type: Boolean, default: false },
+    isLocked: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true },
+    reports: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        reason: { type: String },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -28,5 +39,7 @@ discussionSchema.index({ createdAt: -1 });
 discussionSchema.index({ views: -1 });
 discussionSchema.index({ category: 1 });
 discussionSchema.index({ tags: 1 });
+discussionSchema.index({ isPinned: -1, createdAt: -1 });
+discussionSchema.index({ isLocked: 1, isActive: 1 });
 
 module.exports = mongoose.model("Discussion", discussionSchema);

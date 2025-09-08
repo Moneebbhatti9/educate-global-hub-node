@@ -13,6 +13,13 @@ const replySchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    parentReply: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reply",
+      default: null,
+    },
+
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );
