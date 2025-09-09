@@ -3,7 +3,7 @@ const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
 
 exports.createDiscussion = async (req, res) => {
-  try {
+  try {    
     const { title, content, category, tags } = req.body;
 
     if (!title || !category) {
@@ -25,7 +25,7 @@ exports.createDiscussion = async (req, res) => {
       content: content?.trim() || "",
       category,
       tags: Array.isArray(tags) ? tags : [],
-      createdBy: req.user._id,
+      createdBy: req.user.userId,
     });
 
     const io = req.app.get("io");
@@ -33,6 +33,8 @@ exports.createDiscussion = async (req, res) => {
 
     return successResponse(res, discussion, "Discussion created successfully");
   } catch (err) {
+    console.log(err);
+    
     return errorResponse(res, "Failed to create discussion", 500);
   }
 };
@@ -40,7 +42,7 @@ exports.createDiscussion = async (req, res) => {
 exports.toggleLikeDiscussion = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user.userId;
 
     const discussion = await Discussion.findById(id);
     if (!discussion) return errorResponse(res, "Discussion not found", 404);
@@ -81,7 +83,7 @@ exports.reportDiscussion = async (req, res) => {
       {
         $push: {
           reports: {
-            user: req.user._id,
+            user: req.user.userId,
             reason,
             reportedAt: new Date(),
           },

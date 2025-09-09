@@ -30,7 +30,7 @@ exports.postReply = async (req, res) => {
       discussion: discussionId,
       content: content.trim(),
       parentReply: parentReply || null,
-      createdBy: req.user._id,
+      createdBy: req.user.userId,
     });
 
     // Broadcast via socket
@@ -81,7 +81,7 @@ exports.getRepliesForDiscussion = async (req, res) => {
 exports.toggleLikeReply = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user.userId;
 
     const reply = await Reply.findById(id);
     if (!reply) return errorResponse(res, "Reply not found", 404);
