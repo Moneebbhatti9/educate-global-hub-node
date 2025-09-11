@@ -45,7 +45,7 @@ const {
 
 // Create or update teacher profile (requires authentication)
 router.post(
-  "/create",
+  "/",
   authenticateToken,
   validate("teacherProfile"),
   createOrUpdateTeacherProfile
