@@ -266,7 +266,7 @@ jobApplicationSchema.statics.findByStatus = function (status) {
 jobApplicationSchema.statics.findByJob = function (jobId) {
   return this.find({ jobId }).populate(
     "teacherId",
-    "fullName email phoneNumber country city"
+    "firstName lastName email phoneNumber country city"
   );
 };
 

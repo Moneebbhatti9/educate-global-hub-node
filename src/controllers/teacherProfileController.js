@@ -19,6 +19,88 @@ const {
   computeProfileCompletion,
 } = require("../services/profileCompletionService");
 const { getTeacherProfileForUser } = require("../utils/getTeacherprofile");
+
+// Update teacher profile (PATCH method for partial updates)
+const updateTeacherProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updateData = req.body;
+
+    // Verify user exists and is teacher
+    const user = await User.findById(userId);
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "teacher")
+      return errorResponse(
+        res,
+        "Only teachers can update teacher profiles",
+        403
+      );
+
+    // Check profile exists
+    const existingProfile = await TeacherProfile.findOne({ userId });
+    if (!existingProfile) {
+      return errorResponse(res, "Teacher profile not found", 404);
+    }
+
+    // Normalize phone fields (schema validates + pre-save formats)
+    if (updateData.phoneNumber && !updateData.phoneNumber.startsWith("+")) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.phoneNumber = formatPhoneNumber(
+        updateData.phoneNumber,
+        updateData.country || existingProfile.country
+      );
+    }
+    if (
+      updateData.alternatePhone &&
+      !updateData.alternatePhone.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.alternatePhone = formatPhoneNumber(
+        updateData.alternatePhone,
+        updateData.country || existingProfile.country
+      );
+    }
+
+    // Handle DOB parsing if provided
+    if (updateData.dateOfBirth) {
+      const dob = new Date(updateData.dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        return errorResponse(res, "Invalid dateOfBirth format", 400);
+      }
+      updateData.dateOfBirth = dob;
+    }
+
+    // Update profile with $set to allow partial updates
+    let updatedProfile = await TeacherProfile.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    // Recalculate profile completion (percentage) and update directly
+    const completion = await updatedProfile.checkProfileCompletion();
+    await TeacherProfile.findByIdAndUpdate(updatedProfile._id, {
+      $set: {
+        profileCompletion: completion,
+        isProfileComplete: completion >= 80,
+      },
+    });
+
+    // Update the local object for response
+    updatedProfile.profileCompletion = completion;
+    updatedProfile.isProfileComplete = completion >= 80;
+
+    return successResponse(
+      res,
+      updatedProfile,
+      "Teacher profile updated successfully"
+    );
+  } catch (error) {
+    console.error("Error updating teacher profile:", error);
+    return errorResponse(res, "Failed to update teacher profile", 500);
+  }
+};
+
 // Create or update teacher profile
 const createOrUpdateTeacherProfile = async (req, res) => {
   try {
@@ -1131,6 +1213,7 @@ const deleteActivity = async (req, res) => {
 
 module.exports = {
   createOrUpdateTeacherProfile,
+  updateTeacherProfile,
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,

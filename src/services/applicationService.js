@@ -120,7 +120,7 @@ class ApplicationService {
 
       const populatedTeacher = await require("../models/TeacherProfile")
         .findById(teacherId)
-        .select("fullName email country city experience subjects")
+        .select("firstName lastName email country city experience subjects")
         .lean();
 
       // Send email notifications
@@ -155,7 +155,7 @@ class ApplicationService {
       if (populateTeacher) {
         query = query.populate(
           "teacherId",
-          "fullName email phoneNumber country city"
+          "firstName lastName email phoneNumber country city"
         );
       }
 
@@ -305,7 +305,10 @@ class ApplicationService {
 
       const [applications, total] = await Promise.all([
         JobApplication.find(query)
-          .populate("teacherId", "fullName email phoneNumber country city")
+          .populate(
+            "teacherId",
+            "firstName lastName email phoneNumber country city"
+          )
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
@@ -628,7 +631,13 @@ class ApplicationService {
                 $match: {
                   $or: [
                     {
-                      "teacher.fullName": {
+                      "teacher.firstName": {
+                        $regex: filters.search,
+                        $options: "i",
+                      },
+                    },
+                    {
+                      "teacher.lastName": {
                         $regex: filters.search,
                         $options: "i",
                       },
@@ -730,7 +739,8 @@ class ApplicationService {
                   },
                   teacher: {
                     _id: "$teacher._id",
-                    fullName: "$teacher.fullName",
+                    firstName: "$teacher.firstName",
+                    lastName: "$teacher.lastName",
                     country: "$teacher.country",
                     city: "$teacher.city",
                     experience: "$teacher.experience",
@@ -768,7 +778,7 @@ class ApplicationService {
           )
           .populate(
             "teacherId",
-            "fullName country city experience subjects qualifications"
+            "firstName lastName country city experience subjects qualifications"
           )
           .sort({ createdAt: -1 })
           .skip(skip)
@@ -818,7 +828,7 @@ class ApplicationService {
           )
           .populate(
             "teacherId",
-            "fullName country city experience subjects qualifications"
+            "firstName lastName country city experience subjects qualifications"
           )
           .sort({ createdAt: -1 })
           .skip(skip)
@@ -1013,7 +1023,7 @@ class ApplicationService {
         .populate("jobId", "title status")
         .populate(
           "teacherId",
-          "fullName email country city experience subjects"
+          "firstName lastName email country city experience subjects"
         )
         .where("schoolId")
         .equals(schoolId)

@@ -6,6 +6,75 @@ const { successResponse, errorResponse } = require("../utils/response");
 const { validateAndFormatPhone } = require("../utils/phoneUtils");
 const { uploadImage, deleteImage } = require("../config/cloudinary");
 
+// Update school profile (PATCH method for partial updates)
+const updateSchoolProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updateData = req.body;
+
+    // Verify user exists and is school
+    const user = await User.findById(userId);
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "school")
+      return errorResponse(res, "Only schools can update school profiles", 403);
+
+    // Check profile exists
+    const existingProfile = await SchoolProfile.findOne({ userId });
+    if (!existingProfile) {
+      return errorResponse(res, "School profile not found", 404);
+    }
+
+    // Normalize phone fields (schema will validate again on save)
+    if (
+      updateData.schoolContactNumber &&
+      !updateData.schoolContactNumber.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.schoolContactNumber = formatPhoneNumber(
+        updateData.schoolContactNumber,
+        updateData.country || existingProfile.country
+      );
+    }
+    if (
+      updateData.alternateContactNumber &&
+      !updateData.alternateContactNumber.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.alternateContactNumber = formatPhoneNumber(
+        updateData.alternateContactNumber,
+        updateData.country || existingProfile.country
+      );
+    }
+
+    // Apply update with $set to allow partial updates
+    let updatedProfile = await SchoolProfile.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    // Recalculate profile completion (boolean) and update directly
+    const isComplete = updatedProfile.checkProfileCompletion();
+    await SchoolProfile.findByIdAndUpdate(updatedProfile._id, {
+      $set: {
+        isProfileComplete: isComplete,
+      },
+    });
+
+    // Update the local object for response
+    updatedProfile.isProfileComplete = isComplete;
+
+    return successResponse(
+      res,
+      updatedProfile,
+      "School profile updated successfully"
+    );
+  } catch (error) {
+    console.error("Error updating school profile:", error);
+    return errorResponse(res, "Failed to update school profile", 500);
+  }
+};
+
 // Create or update school profile
 const createOrUpdateSchoolProfile = async (req, res) => {
   try {
@@ -154,11 +223,15 @@ const getSchoolProfile = async (req, res) => {
       }),
       SchoolMedia.find({ schoolId: schoolProfile._id }).sort({ createdAt: -1 }),
     ]);
-    return successResponse(res, {
-      ...schoolProfile.toObject(),
-      programs,
-      media,
-    }, "School profile retrieved successfully");
+    return successResponse(
+      res,
+      {
+        ...schoolProfile.toObject(),
+        programs,
+        media,
+      },
+      "School profile retrieved successfully"
+    );
   } catch (error) {
     console.error("Error in getSchoolProfile:", error);
     return errorResponse(res, "Failed to retrieve school profile", 500);
@@ -279,9 +352,13 @@ const addProgram = async (req, res) => {
       isActive,
     });
 
-    return successResponse(res,  {
-      data: program,
-    },"Program added successfully");
+    return successResponse(
+      res,
+      {
+        data: program,
+      },
+      "Program added successfully"
+    );
   } catch (err) {
     console.error("addProgram:", err);
     return errorResponse(res, "Failed to add program", 500);
@@ -472,6 +549,7 @@ const deleteSchoolMedia = async (req, res) => {
 
 module.exports = {
   createOrUpdateSchoolProfile,
+  updateSchoolProfile,
   getSchoolProfile,
   getSchoolProfileById,
   searchSchools,

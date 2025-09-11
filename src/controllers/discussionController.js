@@ -1,14 +1,13 @@
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
+const { successResponse, errorResponse } = require("../utils/response");
 
 exports.createDiscussion = async (req, res) => {
-  try {
+  try {    
     const { title, content, category, tags } = req.body;
 
     if (!title || !category) {
-      return res
-        .status(400)
-        .json({ message: "Title and category are required" });
+      return errorResponse(res, "Title and category are required", 400);
     }
 
     const allowedCategories = [
@@ -18,7 +17,7 @@ exports.createDiscussion = async (req, res) => {
       "Help & Support",
     ];
     if (!allowedCategories.includes(category)) {
-      return res.status(400).json({ message: "Invalid category" });
+      return errorResponse(res, "Invalid category", 400);
     }
 
     const discussion = await Discussion.create({
@@ -26,16 +25,78 @@ exports.createDiscussion = async (req, res) => {
       content: content?.trim() || "",
       category,
       tags: Array.isArray(tags) ? tags : [],
-      createdBy: req.user._id,
+      createdBy: req.user.userId,
     });
 
     const io = req.app.get("io");
     if (io) io.emit("newDiscussion", discussion);
 
-    res.status(201).json(discussion);
+    return successResponse(res, discussion, "Discussion created successfully");
   } catch (err) {
-    console.error("Error creating discussion:", err);
-    res.status(500).json({ message: "Failed to create discussion" });
+    console.log(err);
+    
+    return errorResponse(res, "Failed to create discussion", 500);
+  }
+};
+
+exports.toggleLikeDiscussion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const discussion = await Discussion.findById(id);
+    if (!discussion) return errorResponse(res, "Discussion not found", 404);
+
+    const alreadyLiked = discussion.likes.includes(userId);
+    if (alreadyLiked) {
+      discussion.likes.pull(userId);
+    } else {
+      discussion.likes.push(userId);
+    }
+
+    await discussion.save();
+
+    return successResponse(
+      res,
+      {
+        likeCount: discussion.likes.length,
+        liked: !alreadyLiked,
+      },
+      "Like updated successfully"
+    );
+  } catch (err) {
+    return errorResponse(res, "Failed to like discussion", 500);
+  }
+};
+
+exports.reportDiscussion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return errorResponse(res, "Report reason is required", 400);
+    }
+
+    const discussion = await Discussion.findByIdAndUpdate(
+      id,
+      {
+        $push: {
+          reports: {
+            user: req.user.userId,
+            reason,
+            reportedAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!discussion) return errorResponse(res, "Discussion not found", 404);
+
+    return successResponse(res, discussion, "Discussion reported successfully");
+  } catch (err) {
+    return errorResponse(res, "Failed to report discussion", 500);
   }
 };
 
@@ -45,33 +106,53 @@ exports.getAllDiscussions = async (req, res) => {
       .populate("createdBy", "firstName lastName avatarUrl")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(discussions);
+    return successResponse(res, discussions, "Fetched all discussions");
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch discussions" });
+    return errorResponse(res, "Failed to fetch discussions", 500);
   }
 };
 
 exports.getDiscussionById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+    const skip = (pageNum - 1) * pageSize;
 
     const discussion = await Discussion.findByIdAndUpdate(
       id,
-      { $inc: { views: 1 } }, // increase views
+      { $inc: { views: 1 } },
       { new: true }
     ).populate("createdBy", "firstName lastName avatarUrl");
 
     if (!discussion) {
-      return res.status(404).json({ message: "Discussion not found" });
+      return errorResponse(res, "Discussion not found", 404);
     }
 
-    const replies = await Reply.find({ discussion: id })
-      .populate("createdBy", "firstName lastName avatarUrl")
-      .sort({ createdAt: 1 });
+    const [replies, totalReplies] = await Promise.all([
+      Reply.find({ discussion: id })
+        .populate("createdBy", "firstName lastName avatarUrl")
+        .populate("parentReply", "content createdBy")
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(pageSize),
+      Reply.countDocuments({ discussion: id }),
+    ]);
 
-    res.status(200).json({ discussion, replies });
+    return successResponse(res, {
+      discussion,
+      replies,
+      pagination: {
+        page: pageNum,
+        limit: pageSize,
+        totalReplies,
+        totalPages: Math.ceil(totalReplies / pageSize),
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch discussion" });
+    return errorResponse(res, "Failed to fetch discussion", 500);
   }
 };
 
@@ -83,23 +164,18 @@ exports.getDiscussionFeed = async (req, res) => {
     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
     const skip = (pageNum - 1) * pageSize;
 
-    // Base filters
     const match = {};
     if (category) match.category = category;
     if (tag) match.tags = tag;
 
-    // Aggregation
     const pipeline = [
       { $match: match },
-
-      // Join replies and compute replyCount & lastReplyAt
       {
         $lookup: {
           from: "replies",
           let: { discussionId: "$_id" },
           pipeline: [
             { $match: { $expr: { $eq: ["$discussion", "$$discussionId"] } } },
-            { $sort: { createdAt: -1 } },
             {
               $group: {
                 _id: "$discussion",
@@ -124,9 +200,6 @@ exports.getDiscussionFeed = async (req, res) => {
           },
         },
       },
-
-      // Compute a trending score with time decay:
-      // score = (replyCount*3 + views) / pow(hoursSinceCreated + 2, 1.5)
       {
         $addFields: {
           hoursSinceCreated: {
@@ -158,8 +231,6 @@ exports.getDiscussionFeed = async (req, res) => {
           },
         },
       },
-
-      // Keep only what frontend needs (tweak freely)
       {
         $project: {
           title: 1,
@@ -167,7 +238,6 @@ exports.getDiscussionFeed = async (req, res) => {
           category: 1,
           tags: 1,
           createdBy: 1,
-          attachments: 1,
           views: 1,
           createdAt: 1,
           updatedAt: 1,
@@ -178,18 +248,15 @@ exports.getDiscussionFeed = async (req, res) => {
       },
     ];
 
-    // Sort depending on tab
     if (tab === "trending") {
       pipeline.push({ $sort: { trendingScore: -1, createdAt: -1 } });
     } else if (tab === "unanswered") {
       pipeline.push({ $match: { replyCount: 0 } });
       pipeline.push({ $sort: { createdAt: -1 } });
     } else {
-      // recent (default)
       pipeline.push({ $sort: { createdAt: -1 } });
     }
 
-    // Pagination with totalCount
     pipeline.push(
       {
         $facet: {
@@ -207,16 +274,14 @@ exports.getDiscussionFeed = async (req, res) => {
     const result = await Discussion.aggregate(pipeline);
     const { data, total } = result[0] || { data: [], total: 0 };
 
-    res.status(200).json({
-      success: true,
+    return successResponse(res, {
       page: pageNum,
       limit: pageSize,
       total,
       data,
     });
   } catch (err) {
-    console.error("getDiscussionFeed error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch feed" });
+    return errorResponse(res, "Failed to fetch feed", 500);
   }
 };
 
@@ -244,16 +309,12 @@ exports.getDiscussionStats = async (req, res) => {
         Reply.countDocuments({ createdAt: { $gte: startOfDay } }),
       ]);
 
-      totals.today = {
-        discussions: todayDiscussions,
-        replies: todayReplies,
-      };
+      totals.today = { discussions: todayDiscussions, replies: todayReplies };
     }
 
-    res.status(200).json({ success: true, ...totals });
+    return successResponse(res, totals, "Discussion stats fetched succesfully");
   } catch (err) {
-    console.error("getDiscussionStats error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch stats" });
+    return errorResponse(res, "Failed to fetch stats", 500);
   }
 };
 
@@ -346,11 +407,125 @@ exports.getTrendingTopics = async (req, res) => {
 
     const data = await Discussion.aggregate(pipeline);
 
-    res.status(200).json({ success: true, data });
+    return successResponse(res, data, "Trending Topics fetched succesfully");
   } catch (err) {
-    console.error("getTrendingTopics error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch trending topics" });
+    return errorResponse(res, "Failed to fetch trending topics", 500);
+  }
+};
+
+exports.getRelatedDiscussions = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const discussion = await Discussion.findById(id);
+    if (!discussion) return errorResponse(res, "Discussion not found", 404);
+
+    const related = await Discussion.find({
+      _id: { $ne: id },
+      category: discussion.category,
+    })
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return successResponse(res, related, "Related discussions fetched!");
+  } catch (err) {
+    return errorResponse(res, "Failed to fetch related discussions", 500);
+  }
+};
+
+exports.getCategoryStats = async (req, res) => {
+  try {
+    const stats = await Discussion.aggregate([
+      {
+        $group: {
+          _id: "$category",
+          posts: { $sum: 1 },
+          users: { $addToSet: "$createdBy" },
+          discussionIds: { $addToSet: "$_id" },
+        },
+      },
+      {
+        $lookup: {
+          from: "replies",
+          localField: "discussionIds",
+          foreignField: "discussion",
+          as: "replies",
+        },
+      },
+      {
+        $addFields: {
+          replyUsers: {
+            $map: { input: "$replies", as: "r", in: "$$r.createdBy" },
+          },
+        },
+      },
+      {
+        $project: {
+          category: "$_id",
+          posts: 1,
+          members: {
+            $size: { $setUnion: ["$users", "$replyUsers"] },
+          },
+        },
+      },
+      { $sort: { category: 1 } },
+    ]);
+
+    return successResponse(res, stats, "Category stats fetched successfully");
+  } catch (err) {
+    console.error("getCategoryStats error:", err);
+    return errorResponse(res, "Failed to fetch category stats");
+  }
+};
+
+//  Community overview using aggregation
+exports.getCommunityOverview = async (req, res) => {
+  try {
+    const [discussionAgg, replyAgg] = await Promise.all([
+      Discussion.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalDiscussions: { $sum: 1 },
+            discussionUsers: { $addToSet: "$createdBy" },
+          },
+        },
+      ]),
+      Reply.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalReplies: { $sum: 1 },
+            replyUsers: { $addToSet: "$createdBy" },
+          },
+        },
+      ]),
+    ]);
+
+    const totalDiscussions = discussionAgg[0]?.totalDiscussions || 0;
+    const totalReplies = replyAgg[0]?.totalReplies || 0;
+
+    const discussionUsers = discussionAgg[0]?.discussionUsers || [];
+    const replyUsers = replyAgg[0]?.replyUsers || [];
+
+    const activeMembers = new Set([
+      ...discussionUsers.map((u) => u.toString()),
+      ...replyUsers.map((u) => u.toString()),
+    ]).size;
+
+    const overview = {
+      activeMembers,
+      totalDiscussions,
+      totalReplies,
+    };
+
+    return successResponse(
+      res,
+      overview,
+      "Community overview fetched successfully"
+    );
+  } catch (err) {
+    console.error("getCommunityOverview error:", err);
+    return errorResponse(res, "Failed to fetch community overview");
   }
 };

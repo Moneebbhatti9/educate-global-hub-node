@@ -1,49 +1,115 @@
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
+const { successResponse, errorResponse } = require("../utils/response");
 
 exports.postReply = async (req, res) => {
   try {
-    const { discussionId, content } = req.body;
+    const { discussionId, content, parentReply } = req.body;
 
-    if (!discussionId || !content) {
-      return res
-        .status(400)
-        .json({ message: "Discussion ID and content are required" });
+    if (!discussionId || !content?.trim()) {
+      return errorResponse(res, "Discussion ID and content are required", 400);
     }
 
     // Check if discussion exists
     const discussion = await Discussion.findById(discussionId);
     if (!discussion) {
-      return res.status(404).json({ message: "Discussion not found" });
+      return errorResponse(res, "Discussion not found", 404);
+    }
+    if (discussion.isLocked)
+      return errorResponse(res, "Discussion is locked", 403);
+
+    // If parentReply provided, ensure it exists and belongs to same discussion
+    if (parentReply) {
+      const parent = await Reply.findById(parentReply);
+      if (!parent || String(parent.discussion) !== String(discussionId)) {
+        return errorResponse(res, "Invalid parent reply", 400);
+      }
     }
 
     const reply = await Reply.create({
       discussion: discussionId,
-      content: content,
-      createdBy: req.user._id,
+      content: content.trim(),
+      parentReply: parentReply || null,
+      createdBy: req.user.userId,
     });
 
     // Broadcast via socket
     const io = req.app.get("io");
     if (io) io.emit("newReply", reply);
 
-    res.status(201).json(reply);
+    return successResponse(res, reply, "Reply posted successfully", 201);
   } catch (err) {
-    console.error("Error posting reply:", err);
-    res.status(500).json({ message: "Failed to post reply" });
+    console.error("postReply error:", err);
+    return errorResponse(res, "Failed to post reply", 500);
   }
 };
 
 exports.getRepliesForDiscussion = async (req, res) => {
   try {
     const { discussionId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+    const skip = (pageNum - 1) * pageSize;
 
     const replies = await Reply.find({ discussion: discussionId })
       .populate("createdBy", "firstName lastName avatarUrl")
-      .sort({ createdAt: 1 });
+      .populate("parentReply", "content createdBy")
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(pageSize);
 
-    res.status(200).json(replies);
+    const total = await Reply.countDocuments({ discussion: discussionId });
+
+    return successResponse(
+      res,
+      {
+        page: pageNum,
+        limit: pageSize,
+        total,
+        data: replies,
+      },
+      "Replies fetched succesfully"
+    );
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch replies" });
+    console.error("getRepliesForDiscussion error:", err);
+    return errorResponse(res, "Failed to fetch replies", 500);
+  }
+};
+
+exports.toggleLikeReply = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const reply = await Reply.findById(id);
+    if (!reply) return errorResponse(res, "Reply not found", 404);
+
+    const alreadyLiked = reply.likes.includes(userId);
+    if (alreadyLiked) {
+      reply.likes.pull(userId);
+    } else {
+      reply.likes.push(userId);
+    }
+
+    await reply.save();
+
+    // Broadcast like event
+    const io = req.app.get("io");
+    if (io) io.emit("likeReply", { replyId: id, userId, liked: !alreadyLiked });
+
+    return successResponse(
+      res,
+      {
+        replyId: id,
+        likeCount: reply.likes.length,
+        liked: !alreadyLiked,
+      },
+      "Like status updated!"
+    );
+  } catch (err) {
+    console.error("toggleLikeReply error:", err);
+    return errorResponse(res, "Failed to like reply", 500);
   }
 };

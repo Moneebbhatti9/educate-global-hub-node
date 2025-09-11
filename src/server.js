@@ -27,7 +27,7 @@ const schoolDashboardRoutes = require("./routes/schoolDashboard");
 const adminDashboardRoutes = require("./routes/adminDashboard");
 const discussionRoutes = require("./routes/discussion");
 const replyRoutes = require("./routes/reply");
-
+const adminForumRoutes = require("./routes/adminForum");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -43,15 +43,34 @@ connectDB();
 app.use(
   helmet({
     contentSecurityPolicy: {
+      useDefaults: true,
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        objectSrc: ["'none'"], // block Flash, etc.
+        frameAncestors: ["'none'"], // prevent clickjacking (modern CSP way)
       },
     },
+    frameguard: { action: "deny" }, // adds X-Frame-Options: DENY
+    hsts: {
+      maxAge: 63072000, // 2 years
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: "no-referrer-when-downgrade" },
   })
 );
+
+// Add Permissions-Policy manually
+app.use((req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "geolocation=(), microphone=(), camera=()"
+  );
+  next();
+});
 
 // CORS configuration
 const corsOptions = {
@@ -126,6 +145,7 @@ app.use(`/api/${apiVersion}/schoolDashboard`, schoolDashboardRoutes);
 app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
 app.use(`/api/${apiVersion}/discussion`, discussionRoutes);
 app.use(`/api/${apiVersion}/reply`, replyRoutes);
+app.use(`/api/${apiVersion}/adminForum`, adminForumRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
