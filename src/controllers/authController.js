@@ -172,6 +172,33 @@ const verifyOTPController = async (req, res, next) => {
       }
     }
 
+    // Generate tokens for both verification and reset types
+    const user = await User.findOne({ email });
+    if (user) {
+      const { accessToken, refreshToken } = generateTokens(
+        user._id,
+        user.email,
+        user.role
+      );
+
+      // Store refresh token
+      const refreshTokenHash = await hashPassword(refreshToken);
+      const expiresAt = dayjs().add(7, "day").toDate();
+      await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
+
+      return successResponse(
+        res,
+        {
+          user: sanitizeUser(user),
+          accessToken,
+          refreshToken,
+        },
+        type === "verification"
+          ? "Email verified successfully. Welcome email sent!"
+          : "OTP verified successfully"
+      );
+    }
+
     return successResponse(
       res,
       null,
