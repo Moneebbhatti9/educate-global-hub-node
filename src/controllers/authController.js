@@ -174,6 +174,7 @@ const verifyOTPController = async (req, res, next) => {
 
     // Generate tokens for both verification and reset types
     const user = await User.findOne({ email });
+    console.log("user ====>", user);
     if (user) {
       const { accessToken, refreshToken } = generateTokens(
         user._id,
