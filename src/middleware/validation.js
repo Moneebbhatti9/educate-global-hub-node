@@ -260,10 +260,9 @@ const validationSchemas = {
       "string.max": "Province/State cannot exceed 50 characters",
       "any.required": "Province/State is required",
     }),
-    zipCode: Joi.string().min(2).max(20).required().messages({
+    zipCode: Joi.string().min(2).max(20).optional().allow("").messages({
       "string.min": "Zip code must be at least 2 characters long",
       "string.max": "Zip code cannot exceed 20 characters",
-      "any.required": "Zip code is required",
     }),
     address: Joi.string().min(5).max(200).required().messages({
       "string.min": "Address must be at least 5 characters long",
@@ -335,10 +334,9 @@ const validationSchemas = {
       "string.max": "Province/State cannot exceed 50 characters",
       "any.required": "Province/State is required",
     }),
-    zipCode: Joi.string().min(2).max(20).required().messages({
+    zipCode: Joi.string().min(2).max(20).optional().allow("").messages({
       "string.min": "Zip code must be at least 2 characters long",
       "string.max": "Zip code cannot exceed 20 characters",
-      "any.required": "Zip code is required",
     }),
     address: Joi.string().min(5).max(200).required().messages({
       "string.min": "Address must be at least 5 characters long",

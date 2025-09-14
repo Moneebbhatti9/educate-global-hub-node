@@ -76,7 +76,7 @@ const teacherProfileSchema = new mongoose.Schema(
     city: { type: String, required: true, trim: true },
     stateProvince: { type: String, required: true, trim: true },
     country: { type: String, required: true, trim: true },
-    postalCode: { type: String, required: true, trim: true },
+    postalCode: { type: String, required: false, trim: true },
 
     // ---- Professional Links ----
     linkedin: {

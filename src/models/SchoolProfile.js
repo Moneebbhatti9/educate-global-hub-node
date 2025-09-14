@@ -50,7 +50,7 @@ const schoolProfileSchema = new mongoose.Schema(
     },
     zipCode: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
     },
     address: {

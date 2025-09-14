@@ -154,10 +154,47 @@ const requireProfileCompletion = async (req, res, next) => {
   }
 };
 
+// Check user status and redirect accordingly
+const checkUserStatus = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return unauthorizedResponse(res, "Authentication required");
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return unauthorizedResponse(res, "User not found");
+    }
+
+    // Check email verification
+    if (!user.isEmailVerified) {
+      return forbiddenResponse(res, "Email verification required");
+    }
+
+    // Check profile completion first - this takes priority over status
+    if (!user.isProfileComplete) {
+      return forbiddenResponse(res, "Profile completion required");
+    }
+
+    // Only check user status AFTER profile is complete
+    // Check user status for non-admin/teacher users
+    if (user.role !== "admin" && user.role !== "teacher") {
+      if (user.status !== "active") {
+        return forbiddenResponse(res, "Account not active");
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   authenticateToken,
   optionalAuth,
   authorizeRoles,
   requireEmailVerification,
   requireProfileCompletion,
+  checkUserStatus,
 };

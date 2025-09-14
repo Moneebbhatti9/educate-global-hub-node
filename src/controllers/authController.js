@@ -52,14 +52,6 @@ const signup = async (req, res, next) => {
 
     await user.save();
 
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user._id, email, role);
-
-    // Store refresh token
-    const refreshTokenHash = await hashPassword(refreshToken);
-    const expiresAt = dayjs().add(7, "day").toDate();
-    await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
-
     // Send verification email
     try {
       const otp = generateOTP();
@@ -67,6 +59,7 @@ const signup = async (req, res, next) => {
       await emailService.sendVerificationEmail(email, firstName, otp);
     } catch (emailError) {
       console.error("Failed to send verification email:", emailError);
+      return errorResponse(res, "Failed to send verification email", 500);
     }
 
     return createdResponse(
@@ -74,8 +67,6 @@ const signup = async (req, res, next) => {
       "User registered successfully. Please check your email for verification code.",
       {
         user: sanitizeUser(user),
-        accessToken,
-        refreshToken,
       }
     );
   } catch (error) {
@@ -91,6 +82,24 @@ const login = async (req, res, next) => {
     const user = await User.findOne({ email });
     if (!user || !(await comparePassword(password, user.passwordHash))) {
       return unauthorizedResponse(res, "Invalid email or password");
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return unauthorizedResponse(
+        res,
+        "Please verify your email before logging in"
+      );
+    }
+
+    // Check user status for non-admin/teacher users
+    if (user.role !== "admin" && user.role !== "teacher") {
+      if (user.status !== "active") {
+        return unauthorizedResponse(
+          res,
+          "Your account is not active. Please contact support."
+        );
+      }
     }
 
     const { accessToken, refreshToken } = generateTokens(
@@ -158,54 +167,55 @@ const verifyOTPController = async (req, res, next) => {
       return validationErrorResponse(res, result.message);
     }
 
+    const user = await User.findOne({ email });
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
     if (type === "verification") {
       await User.updateOne({ email }, { isEmailVerified: true });
 
+      // Fetch the updated user data after the database update
+      const updatedUser = await User.findOne({ email });
+      if (!updatedUser) {
+        return notFoundResponse(res, "User not found after update");
+      }
+
       // Send welcome email after successful verification
       try {
-        const user = await User.findOne({ email });
-        if (user) {
-          await emailService.sendWelcomeEmail(email, user.firstName);
-        }
+        await emailService.sendWelcomeEmail(email, updatedUser.firstName);
       } catch (emailError) {
         console.error("Failed to send welcome email:", emailError);
       }
-    }
 
-    // Generate tokens for both verification and reset types
-    const user = await User.findOne({ email });
-    console.log("user ====>", user);
-    if (user) {
+      // Generate tokens only after email verification
       const { accessToken, refreshToken } = generateTokens(
-        user._id,
-        user.email,
-        user.role
+        updatedUser._id,
+        updatedUser.email,
+        updatedUser.role
       );
 
       // Store refresh token
       const refreshTokenHash = await hashPassword(refreshToken);
       const expiresAt = dayjs().add(7, "day").toDate();
-      await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
+      await storeRefreshToken(updatedUser._id, refreshTokenHash, expiresAt);
 
       return successResponse(
         res,
         {
-          user: sanitizeUser(user),
+          user: sanitizeUser(updatedUser),
           accessToken,
           refreshToken,
         },
-        type === "verification"
-          ? "Email verified successfully. Welcome email sent!"
-          : "OTP verified successfully"
+        "Email verified successfully. Welcome email sent!"
       );
     }
 
+    // For password reset OTP verification, don't generate tokens
     return successResponse(
       res,
       null,
-      type === "verification"
-        ? "Email verified successfully. Welcome email sent!"
-        : "OTP verified successfully"
+      "OTP verified successfully. You can now reset your password."
     );
   } catch (error) {
     next(error);
@@ -296,15 +306,9 @@ const refresh = async (req, res, next) => {
     const expiresAt = dayjs().add(7, "day").toDate();
     await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
 
-    // Revoke old refresh token by finding it in the database
-    const oldToken = await RefreshToken.findOne({
-      userId: result.userId,
-      isRevoked: false,
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
-
-    if (oldToken) {
-      await oldToken.revoke();
+    // Revoke the specific refresh token that was used
+    if (result.token) {
+      await result.token.revoke();
     }
 
     return successResponse(
@@ -416,6 +420,87 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+// Check user status and profile completion for frontend routing
+const checkUserStatus = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
+    const response = {
+      user: sanitizeUser(user),
+      redirectTo: null,
+    };
+
+    // Check email verification
+    if (!user.isEmailVerified) {
+      response.redirectTo = "verify-email";
+      return successResponse(res, response, "Email verification required");
+    }
+
+    // Check profile completion first - this takes priority over status
+    if (!user.isProfileComplete) {
+      response.redirectTo = "complete-profile";
+      return successResponse(res, response, "Profile completion required");
+    }
+
+    // Only check user status AFTER profile is complete
+    // Check user status for non-admin/teacher users
+    if (user.role !== "admin" && user.role !== "teacher") {
+      if (user.status !== "active") {
+        response.redirectTo = "pending-approval";
+        return successResponse(res, response, "Account pending approval");
+      }
+    }
+
+    // All checks passed, user can access dashboard
+    response.redirectTo = "dashboard";
+    return successResponse(res, response, "User status verified");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Mark profile as complete and check status
+const completeProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    // Update user profile completion status
+    await User.updateOne({ _id: userId }, { isProfileComplete: true });
+
+    // Get updated user
+    const user = await User.findById(userId);
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
+    const response = {
+      user: sanitizeUser(user),
+      redirectTo: null,
+    };
+
+    // After profile completion, check user status for non-admin/teacher users
+    if (user.role !== "admin" && user.role !== "teacher") {
+      if (user.status !== "active") {
+        response.redirectTo = "pending-approval";
+        return successResponse(
+          res,
+          response,
+          "Profile completed. Account pending approval."
+        );
+      }
+    }
+
+    // All checks passed, user can access dashboard
+    response.redirectTo = "dashboard";
+    return successResponse(res, response, "Profile completed successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
@@ -427,4 +512,6 @@ module.exports = {
   logout,
   getCurrentUser,
   changePassword,
+  checkUserStatus,
+  completeProfile,
 };

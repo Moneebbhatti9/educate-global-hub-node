@@ -279,7 +279,6 @@ const createOrUpdateTeacherProfile = async (req, res) => {
         "city",
         "stateProvince",
         "country",
-        "postalCode",
         "qualification",
         "subject",
         "yearsOfTeachingExperience",

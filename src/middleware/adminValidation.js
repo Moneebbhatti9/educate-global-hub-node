@@ -53,8 +53,12 @@ const validateAdminUserCreation = (req, res, next) => {
       errors.stateProvince = "State/Province is required";
     }
 
-    if (!postalCode || postalCode.trim().length < 3) {
-      errors.postalCode = "Postal code is required";
+    if (
+      postalCode &&
+      postalCode.trim().length > 0 &&
+      postalCode.trim().length < 3
+    ) {
+      errors.postalCode = "Postal code must be at least 3 characters long";
     }
 
     if (!city) {
@@ -159,8 +163,12 @@ const validateAdminUserCreation = (req, res, next) => {
       errors.stateProvince = "State/Province is required";
     }
 
-    if (!postalCode || postalCode.trim().length < 3) {
-      errors.postalCode = "Postal code is required";
+    if (
+      postalCode &&
+      postalCode.trim().length > 0 &&
+      postalCode.trim().length < 3
+    ) {
+      errors.postalCode = "Postal code must be at least 3 characters long";
     }
 
     if (schoolName && schoolName.trim().length < 2) {
@@ -232,7 +240,8 @@ const validateAdminUserCreation = (req, res, next) => {
 const validateAdminUserUpdate = (req, res, next) => {
   const errors = {};
 
-  const { firstName, lastName, email, role, phoneNumber, alternatePhone } = req.body;
+  const { firstName, lastName, email, role, phoneNumber, alternatePhone } =
+    req.body;
 
   if (firstName !== undefined && firstName.trim().length < 2) {
     errors.firstName = "First name must be at least 2 characters";
@@ -250,7 +259,8 @@ const validateAdminUserUpdate = (req, res, next) => {
     role !== undefined &&
     !["teacher", "school", "recruiter", "supplier"].includes(role)
   ) {
-    errors.role = "Invalid role. Must be teacher, school, recruiter, or supplier";
+    errors.role =
+      "Invalid role. Must be teacher, school, recruiter, or supplier";
   }
 
   if (phoneNumber !== undefined && !isValidPhoneNumber(phoneNumber)) {
@@ -265,11 +275,23 @@ const validateAdminUserUpdate = (req, res, next) => {
 
   // --- Teacher-specific updates ---
   if (role === "teacher") {
-    const { qualification, yearsOfTeachingExperience, professionalBio, languages } = req.body;
+    const {
+      qualification,
+      yearsOfTeachingExperience,
+      professionalBio,
+      languages,
+    } = req.body;
 
     if (
       qualification !== undefined &&
-      !["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"].includes(qualification)
+      ![
+        "Bachelor",
+        "Master",
+        "PhD",
+        "Diploma",
+        "Certificate",
+        "Other",
+      ].includes(qualification)
     ) {
       errors.qualification = "Invalid qualification";
     }
@@ -278,11 +300,13 @@ const validateAdminUserUpdate = (req, res, next) => {
       yearsOfTeachingExperience !== undefined &&
       (yearsOfTeachingExperience < 0 || yearsOfTeachingExperience > 50)
     ) {
-      errors.yearsOfTeachingExperience = "Years of experience must be between 0 and 50";
+      errors.yearsOfTeachingExperience =
+        "Years of experience must be between 0 and 50";
     }
 
     if (professionalBio !== undefined && professionalBio.length > 1000) {
-      errors.professionalBio = "Professional bio must be less than 1000 characters";
+      errors.professionalBio =
+        "Professional bio must be less than 1000 characters";
     }
 
     if (languages !== undefined) {
@@ -295,7 +319,13 @@ const validateAdminUserUpdate = (req, res, next) => {
           }
           if (
             lang.proficiency !== undefined &&
-            !["Native", "Fluent", "Advanced", "Intermediate", "Beginner"].includes(lang.proficiency)
+            ![
+              "Native",
+              "Fluent",
+              "Advanced",
+              "Intermediate",
+              "Beginner",
+            ].includes(lang.proficiency)
           ) {
             errors[`languages[${i}].proficiency`] = "Invalid proficiency level";
           }
@@ -306,25 +336,44 @@ const validateAdminUserUpdate = (req, res, next) => {
 
   // --- School-specific updates ---
   if (role === "school") {
-    const { schoolSize, schoolType, genderType, curriculum, ageGroup, aboutSchool } = req.body;
+    const {
+      schoolSize,
+      schoolType,
+      genderType,
+      curriculum,
+      ageGroup,
+      aboutSchool,
+    } = req.body;
 
     if (
       schoolSize !== undefined &&
-      !["Small (1-500 students)", "Medium (501-1000 students)", "Large (1001+ students)"].includes(
-        schoolSize
-      )
+      ![
+        "Small (1-500 students)",
+        "Medium (501-1000 students)",
+        "Large (1001+ students)",
+      ].includes(schoolSize)
     ) {
       errors.schoolSize = "Invalid school size";
     }
 
     if (
       schoolType !== undefined &&
-      !["Public", "Private", "International", "Charter", "Religious", "Other"].includes(schoolType)
+      ![
+        "Public",
+        "Private",
+        "International",
+        "Charter",
+        "Religious",
+        "Other",
+      ].includes(schoolType)
     ) {
       errors.schoolType = "Invalid school type";
     }
 
-    if (genderType !== undefined && !["Boys Only", "Girls Only", "Mixed"].includes(genderType)) {
+    if (
+      genderType !== undefined &&
+      !["Boys Only", "Girls Only", "Mixed"].includes(genderType)
+    ) {
       errors.genderType = "Invalid gender type";
     }
 
