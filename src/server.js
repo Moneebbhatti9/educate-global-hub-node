@@ -49,8 +49,13 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
-        objectSrc: ["'none'"], // block Flash, etc.
-        frameAncestors: ["'none'"], // prevent clickjacking (modern CSP way)
+        connectSrc: [
+          "'self'",
+          "http://localhost:5173",
+          "http://localhost:5000",
+        ], // 👈 allow Vite frontend and local API
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
       },
     },
     frameguard: { action: "deny" }, // adds X-Frame-Options: DENY
@@ -74,7 +79,7 @@ app.use((req, res, next) => {
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:3000"],
+  origin: process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:5173"],
   credentials: true,
   optionsSuccessStatus: 200,
 };

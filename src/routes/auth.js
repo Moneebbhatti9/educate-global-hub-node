@@ -13,6 +13,8 @@ const {
   logout,
   getCurrentUser,
   changePassword,
+  checkUserStatus,
+  completeProfile,
 } = require("../controllers/authController");
 
 const router = express.Router();
@@ -90,5 +92,15 @@ router.post(
   validate("changePassword"),
   changePassword
 );
+
+// @route   GET /api/v1/auth/check-status
+// @desc    Check user status and profile completion for frontend routing
+// @access  Private
+router.get("/check-status", authenticateToken, checkUserStatus);
+
+// @route   POST /api/v1/auth/complete-profile
+// @desc    Mark profile as complete and check user status
+// @access  Private
+router.post("/complete-profile", authenticateToken, completeProfile);
 
 module.exports = router;
