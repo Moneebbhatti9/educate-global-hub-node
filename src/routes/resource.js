@@ -40,7 +40,7 @@ router.post(
 );
 // Update Resource
 router.put(
-  "/:resourceId",
+  "/:id",
   authenticateToken,
   upload.fields([
     { name: "coverPhoto", maxCount: 1 },
