@@ -1,6 +1,12 @@
 const express = require("express");
 const multer = require("multer");
-const { createResource, updateResource } = require("../controllers/resourceController");
+const {
+  createResource,
+  updateResource,
+  updateResourceStatus,
+  getMyResources,
+  deleteResource,
+} = require("../controllers/resourceController");
 const { authenticateToken } = require("../middleware/auth");
 const router = express.Router();
 
@@ -40,7 +46,7 @@ router.post(
 );
 // Update Resource
 router.put(
-  "/:id",
+  "/update-resource/:id",
   authenticateToken,
   upload.fields([
     { name: "coverPhoto", maxCount: 1 },
@@ -48,5 +54,21 @@ router.put(
     { name: "mainFile", maxCount: 1 },
   ]),
   updateResource
+);
+
+// Update status
+router.patch(
+  "/update-status/:resourceId",
+  authenticateToken,
+  updateResourceStatus
+);
+
+// Resource page
+router.get("/my-resource-page", authenticateToken, getMyResources);
+
+router.delete(
+  "/delete-resource/:resourceId",
+  authenticateToken,
+  deleteResource
 );
 module.exports = router;

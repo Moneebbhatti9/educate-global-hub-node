@@ -1,6 +1,8 @@
 const { uploadImage, deleteImage } = require("../config/cloudinary");
 const resource = require("../models/resource");
 const resourceFile = require("../models/resourceFile");
+const resourcePurchase = require("../models/resourcePurchase");
+const User = require("../models/User");
 const { errorResponse, successResponse } = require("../utils/response");
 
 exports.createResource = async (req, res) => {
@@ -23,6 +25,7 @@ exports.createResource = async (req, res) => {
       isFree,
       price,
       currency,
+      saveAsDraft,
     } = req.body;
 
     // ---- validation ----
@@ -61,6 +64,10 @@ exports.createResource = async (req, res) => {
       }
     }
 
+    let resourceStatus = "pending"; // default publish → pending
+    if (saveAsDraft == true) {
+      resourceStatus = "draft";
+    }
     // ---- create bare resource (so we have resourceId for file docs) ----
     createdResource = await resource.create({
       title: title.trim(),
@@ -73,7 +80,7 @@ exports.createResource = async (req, res) => {
       price: freeFlag ? 0 : Number(price || 0),
       publishing: visibility || "public",
       createdBy: { userId, role: userRole },
-      status: "pending", // always pending until admin approves
+      status: resourceStatus, // always pending until admin approves
     });
 
     // ---- upload banner and create ResourceFile doc (coverPhoto) ----
@@ -353,5 +360,182 @@ exports.updateResource = async (req, res) => {
   } catch (err) {
     console.error("updateResource error:", err);
     return errorResponse(res, "Failed to update resource", 500);
+  }
+};
+
+exports.updateResourceStatus = async (req, res) => {
+  try {
+    const { resourceId } = req.params;
+    const { status } = req.body;
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    // validate input
+    if (
+      !status ||
+      !["draft", "pending", "approved", "rejected"].includes(status)
+    ) {
+      return errorResponse(res, "Invalid status value", 400);
+    }
+
+    const resource = await resource.findById(resourceId);
+    if (!resource || resource.isDeleted) {
+      return errorResponse(res, "Resource not found", 404);
+    }
+
+    // User (non-admin) rules
+    if (userRole !== "admin") {
+      if (status !== "pending") {
+        return errorResponse(res, "You can only set status to pending", 403);
+      }
+
+      if (resource.createdBy.userId.toString() !== userId.toString()) {
+        return errorResponse(
+          res,
+          "Not authorized to update this resource",
+          403
+        );
+      }
+
+      if (resource.status !== "draft") {
+        return errorResponse(res, "Only draft resources can be submitted", 400);
+      }
+
+      resource.status = "pending";
+      resource.approvedBy = null; // reset approval
+    } else {
+      // Admin rules
+      if (!["approved", "rejected", "pending"].includes(status)) {
+        return errorResponse(
+          res,
+          "Admin can only set status to approved, rejected, or pending",
+          400
+        );
+      }
+
+      resource.status = status;
+      resource.approvedBy = status === "approved" ? userId : null;
+    }
+
+    await resource.save();
+
+    return successResponse(res, "Resource status updated successfully", {
+      resource,
+    });
+  } catch (err) {
+    console.error("updateResourceStatus error:", err);
+    return errorResponse(res, "Failed to update resource status", 500);
+  }
+};
+
+exports.getMyResources = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { search, status, page = 1, limit = 10 } = req.query;
+
+    // base query for user's resources
+    let query = { owner: userId };
+
+    if (status && status !== "all") {
+      query.status = status;
+    }
+
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
+
+    // --- Resources ---
+    const resources = await resource
+      .find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
+
+    const totalResources = await resource.countDocuments({ createdBy: userId });
+
+    // --- Sales + Earnings ---
+    const salesStats = await resourcePurchase.aggregate([
+      // Match purchases of resources owned by this user
+      {
+        $lookup: {
+          from: "resources",
+          localField: "resourceId",
+          foreignField: "_id",
+          as: "resource",
+        },
+      },
+      { $unwind: "$resource" },
+      { $match: { "resource.owner": userId } },
+      {
+        $group: {
+          _id: null,
+          totalUnits: { $sum: 1 }, // each purchase = 1 unit
+          totalEarnings: { $sum: "$pricePaid" },
+        },
+      },
+    ]);
+
+    const totalSales = salesStats[0]?.totalUnits || 0;
+    const totalEarnings = salesStats[0]?.totalEarnings || 0;
+
+    // --- User Wallet Info ---
+    const user = await User.findById(userId).lean();
+
+    const stats = {
+      totalResources,
+      totalSales,
+      currentBalance: user.walletBalance || totalEarnings,
+    };
+
+    return successResponse(res, "Resource status updated successfully", {
+      stats,
+      resources,
+    });
+  } catch (error) {
+    console.error("Error fetching resources:", error);
+    return errorResponse(res, "Failed to update resource status", 500);
+  }
+};
+
+exports.deleteResource = async (req, res) => {
+  try {
+    const { resourceId } = req.params;
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    const resource = await resource.findById(resourceId);
+    if (!resource) {
+      return errorResponse(res, "Resource not found", 404);
+    }
+
+    // Only owner or admin can delete
+    if (
+      resource.createdBy.userId.toString() !== userId.toString() &&
+      userRole !== "admin"
+    ) {
+      return errorResponse(
+        res,
+        "You are not authorized to delete this resource",
+        403
+      );
+    }
+
+    // Soft delete
+    resource.isDeleted = true;
+    await resource.save();
+
+    // (Optional) Hard delete related files if needed
+    // await ResourceFile.deleteMany({ resourceId });
+
+    return successResponse(res, null, "Resource deleted successfully", 200);
+  } catch (error) {
+    console.error("Delete Resource Error:", error);
+    return errorResponse(
+      res,
+      "Server error while deleting resource",
+      500,
+      error.message
+    );
   }
 };
