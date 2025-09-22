@@ -107,11 +107,6 @@ const speedLimiter = slowDown({
     return (used - delayAfter) * 500;
   },
 });
-applyMiddlewares(app);
-
-app.use(limiter);
-app.use(speedLimiter);
-
 // Logging middleware
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
@@ -125,6 +120,13 @@ app.use(compression());
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Apply custom middlewares (including Swagger docs)
+applyMiddlewares(app);
+
+// Rate limiting (after body parsing but before routes)
+app.use(limiter);
+app.use(speedLimiter);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
