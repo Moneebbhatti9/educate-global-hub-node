@@ -703,7 +703,7 @@ exports.getAllResourcesMainPage = async (req, res) => {
   try {
     const { q, status, subject, page = 1, limit = 10 } = req.query;
 
-    const filter = { isDeleted: false };
+    const filter = { isDeleted: false, status: "approved" };
 
     if (q) {
       const regex = new RegExp(q, "i");
