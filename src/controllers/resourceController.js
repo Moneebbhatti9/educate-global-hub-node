@@ -20,19 +20,30 @@ exports.createResource = async (req, res) => {
       description,
       shortDescription,
       resourceType,
-      licenseType,
       visibility,
       isFree,
       price,
       currency,
       saveAsDraft,
+      ageRange,
+      curriculum,
+      curriculumType,
+      subject,
     } = req.body;
 
     // ---- validation ----
-    if (!title || !description || !resourceType || !licenseType) {
+    if (
+      !title ||
+      !description ||
+      !resourceType ||
+      !ageRange ||
+      !curriculum ||
+      !curriculumType ||
+      !subject
+    ) {
       return errorResponse(
         res,
-        "Missing required fields (title, description, resourceType, licenseType)",
+        "Missing required fields (title, description, resourceType, ageRange, curriculum, curriculumType, subject)",
         400
       );
     }
@@ -74,13 +85,16 @@ exports.createResource = async (req, res) => {
       description: description.trim(),
       shortDescription: shortDescription?.trim() || "",
       type: resourceType,
-      license: licenseType,
       isFree: freeFlag,
       currency: freeFlag ? currency || null : currency,
       price: freeFlag ? 0 : Number(price || 0),
       publishing: visibility || "public",
       createdBy: { userId, role: userRole },
-      status: resourceStatus, // always pending until admin approves
+      status: resourceStatus,
+      ageRange,
+      curriculum,
+      curriculumType,
+      subject,
     });
 
     // ---- upload banner and create ResourceFile doc (coverPhoto) ----
@@ -230,11 +244,14 @@ exports.updateResource = async (req, res) => {
       description,
       shortDescription,
       type,
-      license,
       publishing,
       isFree,
       price,
       currency,
+      ageRange,
+      curriculum,
+      curriculumType,
+      subject,
     } = req.body;
 
     // Apply updates only if provided
@@ -242,9 +259,12 @@ exports.updateResource = async (req, res) => {
     if (description) resource.description = description;
     if (shortDescription) resource.shortDescription = shortDescription;
     if (type) resource.type = type;
-    if (license) resource.license = license;
     if (publishing) resource.publishing = publishing;
-
+    if (ageRange) resource.ageRange = ageRange;
+    if (curriculum) resource.curriculum = curriculum;
+    if (curriculumType) resource.curriculumType = curriculumType;
+    if (subject) resource.subject = subject;
+    
     if (typeof isFree !== "undefined") {
       resource.isFree = isFree;
       resource.price = isFree ? 0 : price || resource.price;
