@@ -195,8 +195,8 @@ exports.createResource = async (req, res) => {
 
     return successResponse(
       res,
-      "resource created successfully",
-      populatedResource
+      populatedResource,
+      "resource created successfully"
     );
   } catch (err) {
     // cleanup uploaded cloudinary files & DB file docs & resource (best-effort)
@@ -380,7 +380,7 @@ exports.updateResource = async (req, res) => {
 
     await resource.save();
 
-    return successResponse(res, "resource updated successfully", { resource });
+    return successResponse(res, { resource }, "resource updated successfully");
   } catch (err) {
     console.error("updateResource error:", err);
     return errorResponse(res, "Failed to update resource", 500);
@@ -443,9 +443,13 @@ exports.updateResourceStatus = async (req, res) => {
 
     await resource.save();
 
-    return successResponse(res, "Resource status updated successfully", {
-      resource,
-    });
+    return successResponse(
+      res,
+      {
+        resource,
+      },
+      "Resource status updated successfully"
+    );
   } catch (err) {
     console.error("updateResourceStatus error:", err);
     return errorResponse(res, "Failed to update resource status", 500);
@@ -512,10 +516,14 @@ exports.getMyResources = async (req, res) => {
       currentBalance: user.walletBalance || totalEarnings,
     };
 
-    return successResponse(res, "Resource status updated successfully", {
-      stats,
-      resources,
-    });
+    return successResponse(
+      res,
+      {
+        stats,
+        resources,
+      },
+      "Resource status updated successfully"
+    );
   } catch (error) {
     console.error("Error fetching resources:", error);
     return errorResponse(res, "Failed to update resource status", 500);
@@ -612,12 +620,16 @@ exports.getResourceStatsAdmin = async (req, res) => {
 
     const totalSales = totalSalesAgg.length > 0 ? totalSalesAgg[0].total : 0;
 
-    return successResponse(res, {
-      totalResources,
-      pendingApprovals,
-      flaggedResources: 0, // placeholder
-      totalSales,
-    });
+    return successResponse(
+      res,
+      {
+        totalResources,
+        pendingApprovals,
+        flaggedResources: 0, // placeholder
+        totalSales,
+      },
+      "Stats Fetched succesfully"
+    );
   } catch (err) {
     console.error("getResourceStats error:", err);
     return errorResponse(res, "Failed to fetch resource stats", 500);
@@ -669,14 +681,18 @@ exports.getAllResourcesAdmin = async (req, res) => {
 
     const total = await resource.countDocuments(filter);
 
-    return successResponse(res, {
-      resources: formattedResources,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit),
+    return successResponse(
+      res,
+      {
+        resources: formattedResources,
+        pagination: {
+          total,
+          page: parseInt(page),
+          pages: Math.ceil(total / limit),
+        },
       },
-    });
+      "All resources Fetched succesfully"
+    );
   } catch (err) {
     console.error("getAllResources error:", err);
     return errorResponse(res, "Failed to fetch resources", 500);
@@ -728,16 +744,71 @@ exports.getAllResourcesMainPage = async (req, res) => {
 
     const total = await resource.countDocuments(filter);
 
-    return successResponse(res, {
-      resources: formattedResources,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit),
+    return successResponse(
+      res,
+      {
+        resources: formattedResources,
+        pagination: {
+          total,
+          page: parseInt(page),
+          pages: Math.ceil(total / limit),
+        },
       },
-    });
+      "All resources fetched "
+    );
   } catch (err) {
     console.error("getAllResources error:", err);
     return errorResponse(res, "Failed to fetch resources", 500);
+  }
+};
+
+exports.getResourceById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const resourceDoc = await resource
+      .findOne({ _id: id, isDeleted: false })
+      .populate({
+        path: "createdBy.userId",
+        select: "firstName lastName email role",
+      })
+      .populate("coverPhoto")
+      .populate("files"); // assuming files are in a media collection
+
+    if (!resourceDoc) {
+      return errorResponse(res, "Resource not found", 404);
+    }
+
+    // For public API, don’t expose drafts/pending
+    if (!req.user && resourceDoc.status !== "approved") {
+      return errorResponse(res, "Resource not available", 403);
+    }
+    const formattedResource = {
+      id: resourceDoc._id,
+      title: resourceDoc.title,
+      description: resourceDoc.description,
+      subject: resourceDoc.subject,
+      age: resourceDoc.age,
+      curriculum: resourceDoc.curriculum,
+      price: resourceDoc.isFree
+        ? "Free"
+        : `${resourceDoc.currency} ${resourceDoc.price}`,
+      status: resourceDoc.status,
+      thumbnail: resourceDoc.coverPhoto?.url || null,
+      author: resourceDoc.createdBy?.userId
+        ? `${resourceDoc.createdBy.userId.firstName} ${resourceDoc.createdBy.userId.lastName}`
+        : "Unknown",
+      files: resourceDoc.files || [],
+      createdAt: resourceDoc.createdAt,
+    };
+
+    return successResponse(
+      res,
+      formattedResource,
+      "Resource fetched succesfully!"
+    );
+  } catch (err) {
+    console.error("getResourceById error:", err);
+    return errorResponse(res, "Failed to fetch resource", 500);
   }
 };

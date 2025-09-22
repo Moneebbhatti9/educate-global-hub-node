@@ -8,6 +8,7 @@ const {
   deleteResource,
   searchResources,
   getAllResourcesMainPage,
+  getResourceById,
 } = require("../controllers/resourceController");
 const { authenticateToken } = require("../middleware/auth");
 const router = express.Router();
@@ -78,6 +79,8 @@ router.delete(
 router.get("/search-resource", searchResources);
 
 router.get("/get-all-resources", getAllResourcesMainPage);
+
+router.get("/get-resource-by-id/:id", getResourceById);
 
 
 module.exports = router;
