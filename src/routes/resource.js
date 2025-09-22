@@ -6,6 +6,8 @@ const {
   updateResourceStatus,
   getMyResources,
   deleteResource,
+  searchResources,
+  getAllResourcesMainPage,
 } = require("../controllers/resourceController");
 const { authenticateToken } = require("../middleware/auth");
 const router = express.Router();
@@ -71,4 +73,11 @@ router.delete(
   authenticateToken,
   deleteResource
 );
+
+// Public Search Endpoint
+router.get("/search-resource", searchResources);
+
+router.get("/get-all-resources", getAllResourcesMainPage);
+
+
 module.exports = router;

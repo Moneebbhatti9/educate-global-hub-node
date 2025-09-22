@@ -264,7 +264,7 @@ exports.updateResource = async (req, res) => {
     if (curriculum) resource.curriculum = curriculum;
     if (curriculumType) resource.curriculumType = curriculumType;
     if (subject) resource.subject = subject;
-    
+
     if (typeof isFree !== "undefined") {
       resource.isFree = isFree;
       resource.price = isFree ? 0 : price || resource.price;
@@ -557,5 +557,184 @@ exports.deleteResource = async (req, res) => {
       500,
       error.message
     );
+  }
+};
+
+exports.searchResources = async (req, res) => {
+  try {
+    const { q, limit = 10, page = 1 } = req.query;
+
+    if (!q || q.trim() === "") {
+      return errorResponse(res, "Search query is required", 400);
+    }
+
+    const regex = new RegExp(q, "i"); // case-insensitive
+
+    const filter = {
+      $or: [
+        { title: regex },
+        { shortDescription: regex },
+        { description: regex },
+        { curriculum: regex },
+        { subject: regex },
+        { ageRange: regex },
+      ],
+    };
+
+    const resources = await resource
+      .find(filter)
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    return successResponse(res, resources, "Resources fetched successfully");
+  } catch (error) {
+    console.error("Search Resources Error:", error);
+    return errorResponse(res, "Failed to search resources");
+  }
+};
+
+exports.getResourceStatsAdmin = async (req, res) => {
+  try {
+    const totalResources = await resource.countDocuments({ isDeleted: false });
+    const pendingApprovals = await resource.countDocuments({
+      status: "pending",
+      isDeleted: false,
+    });
+    // flagged resources will be added later
+    const totalSalesAgg = await resourcePurchase.aggregate([
+      { $match: { status: "completed" } },
+      { $group: { _id: null, total: { $sum: "$pricePaid" } } },
+    ]);
+
+    const totalSales = totalSalesAgg.length > 0 ? totalSalesAgg[0].total : 0;
+
+    return successResponse(res, {
+      totalResources,
+      pendingApprovals,
+      flaggedResources: 0, // placeholder
+      totalSales,
+    });
+  } catch (err) {
+    console.error("getResourceStats error:", err);
+    return errorResponse(res, "Failed to fetch resource stats", 500);
+  }
+};
+
+exports.getAllResourcesAdmin = async (req, res) => {
+  try {
+    const { q, status, subject, page = 1, limit = 10 } = req.query;
+
+    const filter = { isDeleted: false };
+
+    if (q) {
+      const regex = new RegExp(q, "i");
+      filter.$or = [{ title: regex }, { description: regex }];
+    }
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    if (subject && subject !== "all") {
+      filter.subject = subject;
+    }
+
+    const resources = await resource
+      .find(filter)
+      .populate({
+        path: "createdBy.userId",
+        select: "firstName lastName email role",
+      })
+      .populate("coverPhoto")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const formattedResources = resources.map((r) => ({
+      id: r._id,
+      thumbnail: r.coverPhoto?.url || null,
+      title: r.title,
+      author: r.createdBy?.userId
+        ? `${r.createdBy.userId.firstName} ${r.createdBy.userId.lastName}`
+        : "Unknown",
+      price: r.isFree ? "Free" : `${r.currency} ${r.price}`,
+      status: r.status,
+      flags: 0, // placeholder
+      uploadDate: r.createdAt,
+    }));
+
+    const total = await resource.countDocuments(filter);
+
+    return successResponse(res, {
+      resources: formattedResources,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    console.error("getAllResources error:", err);
+    return errorResponse(res, "Failed to fetch resources", 500);
+  }
+};
+
+exports.getAllResourcesMainPage = async (req, res) => {
+  try {
+    const { q, status, subject, page = 1, limit = 10 } = req.query;
+
+    const filter = { isDeleted: false };
+
+    if (q) {
+      const regex = new RegExp(q, "i");
+      filter.$or = [{ title: regex }, { description: regex }];
+    }
+
+    if (status && status !== "all") {
+      filter.status = status;
+    }
+
+    if (subject && subject !== "all") {
+      filter.subject = subject;
+    }
+
+    const resources = await resource
+      .find(filter)
+      .populate({
+        path: "createdBy.userId",
+        select: "firstName lastName email role",
+      })
+      .populate("coverPhoto")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const formattedResources = resources.map((r) => ({
+      id: r._id,
+      thumbnail: r.coverPhoto?.url || null,
+      title: r.title,
+      author: r.createdBy?.userId
+        ? `${r.createdBy.userId.firstName} ${r.createdBy.userId.lastName}`
+        : "Unknown",
+      price: r.isFree ? "Free" : `${r.currency} ${r.price}`,
+      status: r.status,
+      flags: 0, // placeholder
+      uploadDate: r.createdAt,
+    }));
+
+    const total = await resource.countDocuments(filter);
+
+    return successResponse(res, {
+      resources: formattedResources,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    console.error("getAllResources error:", err);
+    return errorResponse(res, "Failed to fetch resources", 500);
   }
 };
