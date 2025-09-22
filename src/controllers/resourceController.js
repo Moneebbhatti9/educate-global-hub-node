@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { uploadImage, deleteImage } = require("../config/cloudinary");
 const resource = require("../models/resource");
 const resourceFile = require("../models/resourceFile");
@@ -18,7 +19,6 @@ exports.createResource = async (req, res) => {
     const {
       title,
       description,
-      shortDescription,
       resourceType,
       visibility,
       isFree,
@@ -79,23 +79,9 @@ exports.createResource = async (req, res) => {
     if (saveAsDraft == true) {
       resourceStatus = "draft";
     }
-    // ---- create bare resource (so we have resourceId for file docs) ----
-    createdResource = await resource.create({
-      title: title.trim(),
-      description: description.trim(),
-      shortDescription: shortDescription?.trim() || "",
-      type: resourceType,
-      isFree: freeFlag,
-      currency: freeFlag ? currency || null : currency,
-      price: freeFlag ? 0 : Number(price || 0),
-      publishing: visibility || "public",
-      createdBy: { userId, role: userRole },
-      status: resourceStatus,
-      ageRange,
-      curriculum,
-      curriculumType,
-      subject,
-    });
+
+    // Generate a temporary resource ID for file organization
+    const tempResourceId = new mongoose.Types.ObjectId();
 
     // ---- upload banner and create ResourceFile doc (coverPhoto) ----
     const bannerFile = req.files.banner[0];
@@ -103,7 +89,7 @@ exports.createResource = async (req, res) => {
       `data:${bannerFile.mimetype};base64,${bannerFile.buffer.toString(
         "base64"
       )}`,
-      `educate-hub/resources/${createdResource._id}/banner`
+      `educate-hub/resources/${tempResourceId}/banner`
     );
 
     if (!bannerResult || !bannerResult.success) {
@@ -112,7 +98,7 @@ exports.createResource = async (req, res) => {
     uploadedPublicIds.push(bannerResult.public_id);
 
     const bannerDoc = await resourceFile.create({
-      resourceId: createdResource._id,
+      resourceId: tempResourceId,
       fileType: "cover",
       url: bannerResult.url,
       publicId: bannerResult.public_id,
@@ -127,7 +113,7 @@ exports.createResource = async (req, res) => {
     for (const f of req.files.previews) {
       const r = await uploadImage(
         `data:${f.mimetype};base64,${f.buffer.toString("base64")}`,
-        `educate-hub/resources/${createdResource._id}/previews`
+        `educate-hub/resources/${tempResourceId}/previews`
       );
       if (!r || !r.success) {
         throw new Error("Preview upload failed");
@@ -135,7 +121,7 @@ exports.createResource = async (req, res) => {
       uploadedPublicIds.push(r.public_id);
 
       const pf = await resourceFile.create({
-        resourceId: createdResource._id,
+        resourceId: tempResourceId,
         fileType: "preview",
         url: r.url,
         publicId: r.public_id,
@@ -152,7 +138,7 @@ exports.createResource = async (req, res) => {
     for (const f of req.files.files) {
       const r = await uploadImage(
         `data:${f.mimetype};base64,${f.buffer.toString("base64")}`,
-        `educate-hub/resources/${createdResource._id}/files`
+        `educate-hub/resources/${tempResourceId}/files`
       );
       if (!r || !r.success) {
         throw new Error("resource file upload failed");
@@ -160,7 +146,7 @@ exports.createResource = async (req, res) => {
       uploadedPublicIds.push(r.public_id);
 
       const fd = await resourceFile.create({
-        resourceId: createdResource._id,
+        resourceId: tempResourceId,
         fileType: "main",
         url: r.url,
         publicId: r.public_id,
@@ -172,12 +158,32 @@ exports.createResource = async (req, res) => {
       createdFileDocs.push(fd);
     }
 
-    // ---- update resource with references ----
-    // set coverPhoto to bannerDoc._id, previewImages to previewDocs ids, mainFile to first file doc
-    createdResource.coverPhoto = bannerDoc._id;
-    createdResource.previewImages = previewDocs.map((d) => d._id);
-    createdResource.mainFile = fileDocs[0]._id; // mainFile is single id per schema
-    await createdResource.save();
+    // ---- create resource with all file references ----
+    createdResource = await resource.create({
+      _id: tempResourceId,
+      title: title.trim(),
+      description: description.trim(),
+      type: resourceType,
+      isFree: freeFlag,
+      currency: freeFlag ? currency || null : currency,
+      price: freeFlag ? 0 : Number(price || 0),
+      publishing: visibility || "public",
+      createdBy: { userId, role: userRole },
+      status: resourceStatus,
+      ageRange,
+      curriculum,
+      curriculumType,
+      subject,
+      coverPhoto: bannerDoc._id,
+      previewImages: previewDocs.map((d) => d._id),
+      mainFile: fileDocs[0]._id, // mainFile is single id per schema
+    });
+
+    // Update the resourceFile documents with the actual resource ID
+    await resourceFile.updateMany(
+      { resourceId: tempResourceId },
+      { resourceId: createdResource._id }
+    );
 
     // populate file refs for response
     const populatedResource = await resource
@@ -242,7 +248,6 @@ exports.updateResource = async (req, res) => {
     const {
       title,
       description,
-      shortDescription,
       type,
       publishing,
       isFree,
@@ -257,7 +262,6 @@ exports.updateResource = async (req, res) => {
     // Apply updates only if provided
     if (title) resource.title = title;
     if (description) resource.description = description;
-    if (shortDescription) resource.shortDescription = shortDescription;
     if (type) resource.type = type;
     if (publishing) resource.publishing = publishing;
     if (ageRange) resource.ageRange = ageRange;
@@ -573,7 +577,6 @@ exports.searchResources = async (req, res) => {
     const filter = {
       $or: [
         { title: regex },
-        { shortDescription: regex },
         { description: regex },
         { curriculum: regex },
         { subject: regex },

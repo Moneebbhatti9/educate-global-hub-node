@@ -152,7 +152,7 @@ app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
 app.use(`/api/${apiVersion}/discussion`, discussionRoutes);
 app.use(`/api/${apiVersion}/reply`, replyRoutes);
 app.use(`/api/${apiVersion}/adminForum`, adminForumRoutes);
-app.use(`/api/${apiVersion}/resource`, resourceRoutes);
+app.use(`/api/${apiVersion}/resources`, resourceRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

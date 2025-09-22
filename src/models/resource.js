@@ -4,7 +4,6 @@ const resourceSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     description: { type: String, required: true },
-    shortDescription: { type: String },
 
     type: {
       type: String,
