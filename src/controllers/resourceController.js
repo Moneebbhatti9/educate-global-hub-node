@@ -710,10 +710,6 @@ exports.getAllResourcesMainPage = async (req, res) => {
       filter.$or = [{ title: regex }, { description: regex }];
     }
 
-    if (status && status !== "all") {
-      filter.status = status;
-    }
-
     if (subject && subject !== "all") {
       filter.subject = subject;
     }
