@@ -402,7 +402,10 @@ exports.updateResourceStatus = async (req, res) => {
       return errorResponse(res, "Invalid status value", 400);
     }
 
-    const resource = await resource.findById(resourceId);
+    const resource = await resource
+      .findById(resourceId)
+      .populate("createdBy.userId", "email firstName lastName");
+
     if (!resource || resource.isDeleted) {
       return errorResponse(res, "Resource not found", 404);
     }
@@ -442,7 +445,14 @@ exports.updateResourceStatus = async (req, res) => {
     }
 
     await resource.save();
-
+    if (resource.createdBy?.userId?.email) {
+      await sendResourceStatusUpdateEmail(
+        resource.createdBy.userId.email,
+        resource.createdBy.userId.firstName,
+        resource.title,
+        status
+      );
+    }
     return successResponse(
       res,
       {

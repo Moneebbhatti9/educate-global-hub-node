@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resource Status Update - Educate Global Hub</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+      }
+      .content {
+        background: #f9f9f9;
+        padding: 30px;
+        border-radius: 0 0 10px 10px;
+      }
+      .status-box {
+        background: #e8f4fd;
+        border: 2px solid #2196f3;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .status {
+        font-size: 22px;
+        font-weight: bold;
+        color: #1976d2;
+        letter-spacing: 1px;
+      }
+      .button {
+        display: inline-block;
+        background: #2196f3;
+        color: white;
+        padding: 12px 30px;
+        text-decoration: none;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: #666;
+        font-size: 14px;
+      }
+      .important {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Resource Status Update</h1>
+      <p>Educate Global Hub Notification</p>
+    </div>
+
+    <div class="content">
+      <h2>Hello {{userName}},</h2>
+
+      <p>
+        We wanted to inform you that your resource titled
+        <strong>"{{resourceTitle}}"</strong> has been reviewed by our team.
+      </p>
+
+      <div class="status-box">
+        <h3>Current Status</h3>
+        <div class="status">{{status}}</div>
+      </div>
+
+      {{#ifRejected}}
+      <div class="important">
+        <h4>⚠️ Resource Rejected</h4>
+        <p>
+          Unfortunately, your resource did not meet our publishing criteria.
+          Please review the feedback in your dashboard and make necessary
+          changes before resubmitting.
+        </p>
+      </div>
+      {{/ifRejected}} {{#ifApproved}}
+      <p>
+        🎉 Congratulations! Your resource is now live on our platform and
+        available for other users to explore.
+      </p>
+      {{/ifApproved}}
+
+      <a href="{{frontendUrl}}/resources/{{resourceId}}" class="button"
+        >View Resource</a
+      >
+
+      <p>
+        If you have any questions or need assistance, feel free to contact our
+        support team.
+      </p>
+
+      <p>
+        Best regards,<br />
+        The Educate Global Hub Team
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>
+        This email was sent to {{email}} because you are the creator of this
+        resource on Educate Global Hub.
+      </p>
+      <p>
+        If you believe this was sent in error, please contact support
+        immediately.
+      </p>
+    </div>
+  </body>
+</html>
