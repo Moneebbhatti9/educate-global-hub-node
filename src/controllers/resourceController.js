@@ -402,8 +402,8 @@ exports.updateResourceStatus = async (req, res) => {
       return errorResponse(res, "Invalid status value", 400);
     }
 
-    const resource = await resource.findById(resourceId);
-    if (!resource || resource.isDeleted) {
+    const resourceDoc = await resource.findById(resourceId);
+    if (!resourceDoc || resourceDoc.isDeleted) {
       return errorResponse(res, "Resource not found", 404);
     }
 
@@ -413,7 +413,7 @@ exports.updateResourceStatus = async (req, res) => {
         return errorResponse(res, "You can only set status to pending", 403);
       }
 
-      if (resource.createdBy.userId.toString() !== userId.toString()) {
+      if (resourceDoc.createdBy.userId.toString() !== userId.toString()) {
         return errorResponse(
           res,
           "Not authorized to update this resource",
@@ -421,12 +421,12 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      if (resource.status !== "draft") {
+      if (resourceDoc.status !== "draft") {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
-      resource.status = "pending";
-      resource.approvedBy = null; // reset approval
+      resourceDoc.status = "pending";
+      resourceDoc.approvedBy = null; // reset approval
     } else {
       // Admin rules
       if (!["approved", "rejected", "pending"].includes(status)) {
@@ -437,16 +437,16 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      resource.status = status;
-      resource.approvedBy = status === "approved" ? userId : null;
+      resourceDoc.status = status;
+      resourceDoc.approvedBy = status === "approved" ? userId : null;
     }
 
-    await resource.save();
+    await resourceDoc.save();
 
     return successResponse(
       res,
       {
-        resource,
+        resource: resourceDoc,
       },
       "Resource status updated successfully"
     );
