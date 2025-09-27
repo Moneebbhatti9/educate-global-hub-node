@@ -472,7 +472,7 @@ exports.getMyResources = async (req, res) => {
     const { search, status, page = 1, limit = 10 } = req.query;
 
     // base query for user's resources
-    let query = { owner: userId };
+    let query = { "createdBy.userId": userId };
 
     if (status && status !== "all") {
       query.status = status;
@@ -485,12 +485,17 @@ exports.getMyResources = async (req, res) => {
     // --- Resources ---
     const resources = await resource
       .find(query)
+      .populate("coverPhoto")
+      .populate("previewImages")
+      .populate("mainFile")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
       .lean();
 
-    const totalResources = await resource.countDocuments({ createdBy: userId });
+    const totalResources = await resource.countDocuments({
+      "createdBy.userId": userId,
+    });
 
     // --- Sales + Earnings ---
     const salesStats = await resourcePurchase.aggregate([
@@ -504,7 +509,7 @@ exports.getMyResources = async (req, res) => {
         },
       },
       { $unwind: "$resource" },
-      { $match: { "resource.owner": userId } },
+      { $match: { "resource.createdBy.userId": userId } },
       {
         $group: {
           _id: null,
@@ -518,12 +523,10 @@ exports.getMyResources = async (req, res) => {
     const totalEarnings = salesStats[0]?.totalEarnings || 0;
 
     // --- User Wallet Info ---
-    const user = await User.findById(userId).lean();
-
     const stats = {
       totalResources,
       totalSales,
-      currentBalance: user.walletBalance || totalEarnings,
+      currentBalance: totalEarnings, // Using total earnings as current balance
     };
 
     return successResponse(
@@ -532,11 +535,11 @@ exports.getMyResources = async (req, res) => {
         stats,
         resources,
       },
-      "Resource status updated successfully"
+      "My resources retrieved successfully"
     );
   } catch (error) {
     console.error("Error fetching resources:", error);
-    return errorResponse(res, "Failed to update resource status", 500);
+    return errorResponse(res, "Failed to fetch my resources", 500);
   }
 };
 
