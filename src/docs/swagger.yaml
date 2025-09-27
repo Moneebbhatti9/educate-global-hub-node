@@ -547,7 +547,8 @@ paths:
                     type: string
                     example: "Resource deleted successfully"
                   data:
-                    type: "null"
+                    type: object
+                    nullable: true
         "401":
           description: Unauthorized
           content:
@@ -733,6 +734,183 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/dashboard:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get admin dashboard data
+      description: Get comprehensive dashboard statistics and recent activities for admin users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin dashboard data retrieved"
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        $ref: "#/components/schemas/AdminDashboardStats"
+                      recentActivities:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/RecentActivity"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/admin-resources:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get all resources for admin management
+      description: Get all resources with filtering and pagination for admin management
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query for title or description
+          example: "mathematics"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, draft, pending, approved, rejected]
+          description: Filter by resource status
+          example: "pending"
+        - name: subject
+          in: query
+          schema:
+            type: string
+          description: Filter by subject
+          example: "Mathematics"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of resources per page
+          example: 10
+      responses:
+        "200":
+          description: Resources fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All resources Fetched succesfully"
+                  data:
+                    type: object
+                    properties:
+                      resources:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FormattedResource"
+                      pagination:
+                        $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/admin-resources/stats:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get resource statistics for admin
+      description: Get comprehensive resource statistics including totals, pending approvals, and sales
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Stats Fetched succesfully"
+                  data:
+                    $ref: "#/components/schemas/AdminResourceStats"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
           content:
             application/json:
               schema:
@@ -1060,6 +1238,64 @@ components:
           type: integer
           description: Total number of pages
           example: 10
+
+    AdminDashboardStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          description: Total number of users on the platform
+          example: 1250
+        activeJobs:
+          type: integer
+          description: Number of currently active/published jobs
+          example: 45
+        forumPosts:
+          type: integer
+          description: Total number of forum posts
+          example: 148
+        platformRevenue:
+          type: number
+          description: Total platform revenue
+          example: 43222
+
+    RecentActivity:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [school, job]
+          description: Type of activity
+          example: "school"
+        name:
+          type: string
+          description: Name of the school or job title
+          example: "Springfield Elementary School"
+        createdAt:
+          type: string
+          format: date-time
+          description: When the activity occurred
+          example: "2023-07-01T10:30:00Z"
+
+    AdminResourceStats:
+      type: object
+      properties:
+        totalResources:
+          type: integer
+          description: Total number of resources on the platform
+          example: 250
+        pendingApprovals:
+          type: integer
+          description: Number of resources pending approval
+          example: 12
+        flaggedResources:
+          type: integer
+          description: Number of flagged resources
+          example: 0
+        totalSales:
+          type: number
+          description: Total sales revenue from resources
+          example: 15420.50
 
     ErrorResponse:
       type: object
