@@ -547,7 +547,8 @@ paths:
                     type: string
                     example: "Resource deleted successfully"
                   data:
-                    type: "null"
+                    type: object
+                    nullable: true
         "401":
           description: Unauthorized
           content:
@@ -733,6 +734,1268 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/dashboard:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get admin dashboard data
+      description: Get comprehensive dashboard statistics and recent activities for admin users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin dashboard data retrieved"
+                  data:
+                    type: object
+                    properties:
+                      stats:
+                        $ref: "#/components/schemas/AdminDashboardStats"
+                      recentActivities:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/RecentActivity"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/admin-resources:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get all resources for admin management
+      description: Get all resources with filtering and pagination for admin management
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query for title or description
+          example: "mathematics"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, draft, pending, approved, rejected]
+          description: Filter by resource status
+          example: "pending"
+        - name: subject
+          in: query
+          schema:
+            type: string
+          description: Filter by subject
+          example: "Mathematics"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of resources per page
+          example: 10
+      responses:
+        "200":
+          description: Resources fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All resources Fetched succesfully"
+                  data:
+                    type: object
+                    properties:
+                      resources:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/FormattedResource"
+                      pagination:
+                        $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/admin-dashboard/admin-resources/stats:
+    get:
+      tags:
+        - Admin Dashboard
+      summary: Get resource statistics for admin
+      description: Get comprehensive resource statistics including totals, pending approvals, and sales
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resource statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Stats Fetched succesfully"
+                  data:
+                    $ref: "#/components/schemas/AdminResourceStats"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/adminForum/stats:
+    get:
+      tags:
+        - Admin Forum
+      summary: Get forum statistics
+      description: Get comprehensive forum statistics including total discussions, active discussions, reported posts, pinned posts, and total replies
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Forum statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Forum stats retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ForumStats"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/adminForum/list:
+    get:
+      tags:
+        - Admin Forum
+      summary: Get discussions for admin management
+      description: Get all discussions with filtering and sorting options for admin management
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, reported, pinned]
+          description: Filter by discussion status
+          example: "active"
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by discussion category
+          example: "Teaching Tips & Strategies"
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [recent, trending]
+            default: recent
+          description: Sort discussions by criteria
+          example: "recent"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of discussions per page
+          example: 10
+      responses:
+        "200":
+          description: Discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin discussions retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Discussion"
+                      total:
+                        type: integer
+                        example: 50
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 10
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/adminForum/{id}/pin:
+    patch:
+      tags:
+        - Admin Forum
+      summary: Toggle pin status of a discussion
+      description: Pin or unpin a discussion (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Pin status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion pinned successfully"
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Discussion pinned successfully"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/adminForum/{id}/lock:
+    patch:
+      tags:
+        - Admin Forum
+      summary: Toggle lock status of a discussion
+      description: Lock or unlock a discussion (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Lock status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion locked successfully"
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Discussion locked successfully"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/adminForum/{id}:
+    delete:
+      tags:
+        - Admin Forum
+      summary: Delete a discussion
+      description: Soft delete a discussion (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID to delete
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Discussion deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion deleted successfully"
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Discussion deleted successfully"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/create-discussion:
+    post:
+      tags:
+        - Discussion
+      summary: Create a new discussion
+      description: Create a new discussion post in the forum
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - category
+              properties:
+                title:
+                  type: string
+                  description: Discussion title
+                  example: "Best practices for online teaching"
+                content:
+                  type: string
+                  description: Discussion content/body
+                  example: "I would like to share some effective strategies for engaging students in online classes..."
+                category:
+                  type: string
+                  enum:
+                    - "Teaching Tips & Strategies"
+                    - "Curriculum & Resources"
+                    - "Career Advice"
+                    - "Help & Support"
+                  description: Discussion category
+                  example: "Teaching Tips & Strategies"
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Tags for the discussion
+                  example: ["online-teaching", "engagement", "strategies"]
+      responses:
+        "201":
+          description: Discussion created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion created successfully"
+                  data:
+                    $ref: "#/components/schemas/Discussion"
+        "400":
+          description: Bad request - missing required fields or invalid category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/{id}/like:
+    post:
+      tags:
+        - Discussion
+      summary: Like or unlike a discussion
+      description: Toggle like status for a discussion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Like status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Like status updated!"
+                  data:
+                    type: object
+                    properties:
+                      discussionId:
+                        type: string
+                        example: "64a1b2c3d4e5f6789abcdef0"
+                      likeCount:
+                        type: integer
+                        example: 15
+                      liked:
+                        type: boolean
+                        example: true
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/{id}/report:
+    post:
+      tags:
+        - Discussion
+      summary: Report a discussion
+      description: Report a discussion for inappropriate content
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  description: Reason for reporting the discussion
+                  example: "Inappropriate content"
+      responses:
+        "200":
+          description: Discussion reported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion reported successfully"
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Discussion reported successfully"
+        "400":
+          description: Bad request - report reason is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/get-all-discussions:
+    get:
+      tags:
+        - Discussion
+      summary: Get all discussions
+      description: Get all discussions (for admin/debug purposes)
+      responses:
+        "200":
+          description: All discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All discussions retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Discussion"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/get-specific-discussion/{id}:
+    get:
+      tags:
+        - Discussion
+      summary: Get a specific discussion
+      description: Get a specific discussion with replies and pagination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for replies pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of replies per page
+          example: 10
+      responses:
+        "200":
+          description: Discussion retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Discussion"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/feed:
+    get:
+      tags:
+        - Discussion
+      summary: Get discussion feed
+      description: Get discussion feed with tabs (trending, recent, unanswered)
+      parameters:
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum: [recent, trending, unanswered]
+            default: recent
+          description: Feed tab type
+          example: "recent"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of discussions per page
+          example: 10
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+          example: "Teaching Tips & Strategies"
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag
+          example: "online-teaching"
+      responses:
+        "200":
+          description: Discussion feed retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion feed retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      discussions:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Discussion"
+                      pagination:
+                        $ref: "#/components/schemas/Pagination"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/overview:
+    get:
+      tags:
+        - Discussion
+      summary: Get discussion statistics
+      description: Get discussion statistics including total discussions and replies
+      parameters:
+        - name: withToday
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include today's statistics
+          example: false
+      responses:
+        "200":
+          description: Discussion statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Discussion statistics retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/DiscussionStats"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/trending:
+    get:
+      tags:
+        - Discussion
+      summary: Get trending topics
+      description: Get trending discussion topics
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+          description: Number of trending topics to return
+          example: 5
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+          example: "Teaching Tips & Strategies"
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag
+          example: "online-teaching"
+      responses:
+        "200":
+          description: Trending topics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Trending topics retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrendingTopic"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/{id}/related:
+    get:
+      tags:
+        - Discussion
+      summary: Get related discussions
+      description: Get discussions related to the specified discussion by category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Related discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Related discussions fetched!"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Discussion"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/categories/stats:
+    get:
+      tags:
+        - Discussion
+      summary: Get category statistics
+      description: Get statistics for each discussion category including posts and unique members
+      responses:
+        "200":
+          description: Category statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Category statistics retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CategoryStats"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/discussion/community/overview:
+    get:
+      tags:
+        - Discussion
+      summary: Get community overview
+      description: Get community overview with members, discussions, and replies statistics
+      responses:
+        "200":
+          description: Community overview retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Community overview retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/CommunityOverview"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/reply/add-reply:
+    post:
+      tags:
+        - Reply
+      summary: Add a reply to a discussion
+      description: Add a reply to a discussion or create a nested reply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - discussionId
+                - content
+              properties:
+                discussionId:
+                  type: string
+                  description: ID of the discussion to reply to
+                  example: "64a1b2c3d4e5f6789abcdef0"
+                content:
+                  type: string
+                  description: Reply content
+                  example: "Great point! I've found that interactive activities work really well..."
+                parentReply:
+                  type: string
+                  description: ID of parent reply for nested replies (optional)
+                  example: "64a1b2c3d4e5f6789abcdef1"
+      responses:
+        "201":
+          description: Reply posted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Reply posted successfully"
+                  data:
+                    $ref: "#/components/schemas/Reply"
+        "400":
+          description: Bad request - missing required fields or invalid parent reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - discussion is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/reply/get-replies/{discussionId}:
+    get:
+      tags:
+        - Reply
+      summary: Get replies for a discussion
+      description: Get all replies for a specific discussion with pagination
+      parameters:
+        - name: discussionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of replies per page
+          example: 10
+      responses:
+        "200":
+          description: Replies retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Replies fetched succesfully"
+                  data:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 10
+                      total:
+                        type: integer
+                        example: 25
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Reply"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/reply/toggle-like/{id}:
+    patch:
+      tags:
+        - Reply
+      summary: Like or unlike a reply
+      description: Toggle like status for a reply
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Reply ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+      responses:
+        "200":
+          description: Like status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Like status updated!"
+                  data:
+                    type: object
+                    properties:
+                      replyId:
+                        type: string
+                        example: "64a1b2c3d4e5f6789abcdef0"
+                      likeCount:
+                        type: integer
+                        example: 8
+                      liked:
+                        type: boolean
+                        example: true
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Reply not found
           content:
             application/json:
               schema:
@@ -1060,6 +2323,326 @@ components:
           type: integer
           description: Total number of pages
           example: 10
+
+    AdminDashboardStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+          description: Total number of users on the platform
+          example: 1250
+        activeJobs:
+          type: integer
+          description: Number of currently active/published jobs
+          example: 45
+        forumPosts:
+          type: integer
+          description: Total number of forum posts
+          example: 148
+        platformRevenue:
+          type: number
+          description: Total platform revenue
+          example: 43222
+
+    RecentActivity:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [school, job]
+          description: Type of activity
+          example: "school"
+        name:
+          type: string
+          description: Name of the school or job title
+          example: "Springfield Elementary School"
+        createdAt:
+          type: string
+          format: date-time
+          description: When the activity occurred
+          example: "2023-07-01T10:30:00Z"
+
+    AdminResourceStats:
+      type: object
+      properties:
+        totalResources:
+          type: integer
+          description: Total number of resources on the platform
+          example: 250
+        pendingApprovals:
+          type: integer
+          description: Number of resources pending approval
+          example: 12
+        flaggedResources:
+          type: integer
+          description: Number of flagged resources
+          example: 0
+        totalSales:
+          type: number
+          description: Total sales revenue from resources
+          example: 15420.50
+
+    ForumStats:
+      type: object
+      properties:
+        totalDiscussions:
+          type: integer
+          description: Total number of discussions
+          example: 150
+        active:
+          type: integer
+          description: Number of active discussions
+          example: 142
+        reported:
+          type: integer
+          description: Number of reported discussions
+          example: 3
+        pinned:
+          type: integer
+          description: Number of pinned discussions
+          example: 5
+        totalReplies:
+          type: integer
+          description: Total number of replies
+          example: 450
+
+    Discussion:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        title:
+          type: string
+          description: Discussion title
+          example: "Best practices for online teaching"
+        content:
+          type: string
+          description: Discussion content
+          example: "I would like to share some effective strategies for engaging students in online classes..."
+        category:
+          type: string
+          enum:
+            - "Teaching Tips & Strategies"
+            - "Curriculum & Resources"
+            - "Career Advice"
+            - "Help & Support"
+          description: Discussion category
+          example: "Teaching Tips & Strategies"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Discussion tags
+          example: ["online-teaching", "engagement", "strategies"]
+        createdBy:
+          $ref: "#/components/schemas/DiscussionAuthor"
+        likes:
+          type: array
+          items:
+            type: string
+          description: Array of user IDs who liked the discussion
+          example: ["64a1b2c3d4e5f6789abcdef1", "64a1b2c3d4e5f6789abcdef2"]
+        views:
+          type: integer
+          description: Number of views
+          example: 25
+        isActive:
+          type: boolean
+          description: Whether the discussion is active
+          example: true
+        isPinned:
+          type: boolean
+          description: Whether the discussion is pinned
+          example: false
+        isLocked:
+          type: boolean
+          description: Whether the discussion is locked
+          example: false
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiscussionReport"
+          description: Reports made against the discussion
+        replyCount:
+          type: integer
+          description: Number of replies
+          example: 8
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2023-07-01T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2023-07-01T10:30:00Z"
+
+    DiscussionAuthor:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: User ID
+          example: "64a1b2c3d4e5f6789abcdef1"
+        firstName:
+          type: string
+          description: User's first name
+          example: "John"
+        lastName:
+          type: string
+          description: User's last name
+          example: "Doe"
+        avatarUrl:
+          type: string
+          nullable: true
+          description: User's avatar URL
+          example: "https://res.cloudinary.com/example/image/upload/v1234567890/avatar.jpg"
+
+    DiscussionReport:
+      type: object
+      properties:
+        user:
+          type: string
+          description: User ID who made the report
+          example: "64a1b2c3d4e5f6789abcdef2"
+        reason:
+          type: string
+          description: Reason for the report
+          example: "Inappropriate content"
+        createdAt:
+          type: string
+          format: date-time
+          description: Report timestamp
+          example: "2023-07-01T10:30:00Z"
+
+    Reply:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Reply ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        discussion:
+          type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef1"
+        content:
+          type: string
+          description: Reply content
+          example: "Great point! I've found that interactive activities work really well..."
+        parentReply:
+          type: string
+          nullable: true
+          description: Parent reply ID for nested replies
+          example: "64a1b2c3d4e5f6789abcdef2"
+        createdBy:
+          $ref: "#/components/schemas/DiscussionAuthor"
+        likes:
+          type: array
+          items:
+            type: string
+          description: Array of user IDs who liked the reply
+          example: ["64a1b2c3d4e5f6789abcdef3", "64a1b2c3d4e5f6789abcdef4"]
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2023-07-01T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2023-07-01T10:30:00Z"
+
+    DiscussionStats:
+      type: object
+      properties:
+        totalDiscussions:
+          type: integer
+          description: Total number of discussions
+          example: 150
+        totalReplies:
+          type: integer
+          description: Total number of replies
+          example: 450
+        todayDiscussions:
+          type: integer
+          description: Discussions created today (if withToday=true)
+          example: 5
+        todayReplies:
+          type: integer
+          description: Replies created today (if withToday=true)
+          example: 12
+
+    TrendingTopic:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        title:
+          type: string
+          description: Discussion title
+          example: "Best practices for online teaching"
+        category:
+          type: string
+          description: Discussion category
+          example: "Teaching Tips & Strategies"
+        createdBy:
+          $ref: "#/components/schemas/DiscussionAuthor"
+        views:
+          type: integer
+          description: Number of views
+          example: 25
+        replyCount:
+          type: integer
+          description: Number of replies
+          example: 8
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2023-07-01T10:30:00Z"
+
+    CategoryStats:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Category name
+          example: "Teaching Tips & Strategies"
+        posts:
+          type: integer
+          description: Number of posts in this category
+          example: 45
+        uniqueMembers:
+          type: integer
+          description: Number of unique members who posted in this category
+          example: 32
+        totalReplies:
+          type: integer
+          description: Total replies in this category
+          example: 120
+
+    CommunityOverview:
+      type: object
+      properties:
+        totalDiscussions:
+          type: integer
+          description: Total number of discussions
+          example: 150
+        totalReplies:
+          type: integer
+          description: Total number of replies
+          example: 450
+        uniqueMembers:
+          type: integer
+          description: Number of unique members who participated
+          example: 85
 
     ErrorResponse:
       type: object

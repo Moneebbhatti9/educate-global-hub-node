@@ -55,7 +55,14 @@ exports.getRepliesForDiscussion = async (req, res) => {
 
     const replies = await Reply.find({ discussion: discussionId })
       .populate("createdBy", "firstName lastName avatarUrl")
-      .populate("parentReply", "content createdBy")
+      .populate({
+        path: "parentReply",
+        select: "content createdBy",
+        populate: {
+          path: "createdBy",
+          select: "firstName lastName avatarUrl",
+        },
+      })
       .sort({ createdAt: 1 })
       .skip(skip)
       .limit(pageSize);
@@ -83,7 +90,10 @@ exports.toggleLikeReply = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.userId;
 
-    const reply = await Reply.findById(id);
+    const reply = await Reply.findById(id).populate(
+      "createdBy",
+      "firstName lastName avatarUrl"
+    );
     if (!reply) return errorResponse(res, "Reply not found", 404);
 
     const alreadyLiked = reply.likes.includes(userId);
