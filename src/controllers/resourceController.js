@@ -75,9 +75,16 @@ exports.createResource = async (req, res) => {
       }
     }
 
-    let resourceStatus = "pending"; // default publish → pending
-    if (saveAsDraft == true) {
+    let resourceStatus = "pending"; // default
+    let approvedBy = null;
+
+    if (saveAsDraft) {
       resourceStatus = "draft";
+    }
+
+    if (userRole === "admin") {
+      resourceStatus = "approved";
+      approvedBy = userId;
     }
 
     // Generate a temporary resource ID for file organization
@@ -416,7 +423,7 @@ exports.updateResourceStatus = async (req, res) => {
         return errorResponse(res, "You can only set status to pending", 403);
       }
 
-      if (resourceDoc.createdBy.userId.toString() !== userId.toString()) {
+      if (resource.createdBy.userId.toString() !== userId.toString()) {
         return errorResponse(
           res,
           "Not authorized to update this resource",
@@ -424,12 +431,12 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      if (resourceDoc.status !== "draft") {
+      if (resource.status !== "draft") {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
-      resourceDoc.status = "pending";
-      resourceDoc.approvedBy = null; // reset approval
+      resource.status = "pending";
+      resource.approvedBy = null; // reset approval
     } else {
       // Admin rules
       if (!["approved", "rejected", "pending"].includes(status)) {
@@ -440,8 +447,8 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      resourceDoc.status = status;
-      resourceDoc.approvedBy = status === "approved" ? userId : null;
+      resource.status = status;
+      resource.approvedBy = status === "approved" ? userId : null;
     }
 
     await resource.save();
@@ -456,7 +463,7 @@ exports.updateResourceStatus = async (req, res) => {
     return successResponse(
       res,
       {
-        resource: resourceDoc,
+        resource: resource,
       },
       "Resource status updated successfully"
     );
