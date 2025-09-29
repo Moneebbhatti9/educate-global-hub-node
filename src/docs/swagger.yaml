@@ -945,7 +945,23 @@ paths:
                     type: string
                     example: "Forum stats retrieved successfully"
                   data:
-                    $ref: "#/components/schemas/ForumStats"
+                    type: object
+                    properties:
+                      totalDiscussions:
+                        type: integer
+                        example: 150
+                      active:
+                        type: integer
+                        example: 142
+                      reported:
+                        type: integer
+                        example: 3
+                      pinned:
+                        type: integer
+                        example: 5
+                      totalReplies:
+                        type: integer
+                        example: 450
         "401":
           description: Unauthorized - invalid or missing token
           content:
@@ -1526,7 +1542,29 @@ paths:
                     type: string
                     example: "Discussion retrieved successfully"
                   data:
-                    $ref: "#/components/schemas/Discussion"
+                    type: object
+                    properties:
+                      discussion:
+                        $ref: "#/components/schemas/Discussion"
+                      replies:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Reply"
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                            example: 1
+                          limit:
+                            type: integer
+                            example: 10
+                          totalReplies:
+                            type: integer
+                            example: 25
+                          totalPages:
+                            type: integer
+                            example: 3
         "404":
           description: Discussion not found
           content:
@@ -1598,12 +1636,19 @@ paths:
                   data:
                     type: object
                     properties:
-                      discussions:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 10
+                      total:
+                        type: integer
+                        example: 50
+                      data:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Discussion"
-                      pagination:
-                        $ref: "#/components/schemas/Pagination"
+                          $ref: "#/components/schemas/DiscussionFeedItem"
         "500":
           description: Internal server error
           content:
@@ -1638,9 +1683,26 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: "Discussion statistics retrieved successfully"
+                    example: "Discussion stats fetched succesfully"
                   data:
-                    $ref: "#/components/schemas/DiscussionStats"
+                    type: object
+                    properties:
+                      totalDiscussions:
+                        type: integer
+                        example: 150
+                      totalReplies:
+                        type: integer
+                        example: 450
+                      today:
+                        type: object
+                        properties:
+                          discussions:
+                            type: integer
+                            example: 5
+                          replies:
+                            type: integer
+                            example: 12
+                        description: Only included if withToday=true
         "500":
           description: Internal server error
           content:
@@ -1687,7 +1749,7 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: "Trending topics retrieved successfully"
+                    example: "Trending Topics fetched succesfully"
                   data:
                     type: array
                     items:
@@ -1763,7 +1825,7 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: "Category statistics retrieved successfully"
+                    example: "Category stats fetched successfully"
                   data:
                     type: array
                     items:
@@ -1794,7 +1856,7 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: "Community overview retrieved successfully"
+                    example: "Community overview fetched successfully"
                   data:
                     $ref: "#/components/schemas/CommunityOverview"
         "500":
@@ -2504,7 +2566,7 @@ components:
     DiscussionReport:
       type: object
       properties:
-        user:
+        userId:
           type: string
           description: User ID who made the report
           example: "64a1b2c3d4e5f6789abcdef2"
@@ -2534,10 +2596,19 @@ components:
           description: Reply content
           example: "Great point! I've found that interactive activities work really well..."
         parentReply:
-          type: string
-          nullable: true
-          description: Parent reply ID for nested replies
-          example: "64a1b2c3d4e5f6789abcdef2"
+          oneOf:
+            - type: string
+              description: Parent reply ID for nested replies
+              example: "64a1b2c3d4e5f6789abcdef2"
+            - type: object
+              nullable: true
+              description: Populated parent reply object
+              properties:
+                content:
+                  type: string
+                  example: "Original reply content"
+                createdBy:
+                  $ref: "#/components/schemas/DiscussionAuthor"
         createdBy:
           $ref: "#/components/schemas/DiscussionAuthor"
         likes:
@@ -2592,8 +2663,12 @@ components:
           type: string
           description: Discussion category
           example: "Teaching Tips & Strategies"
-        createdBy:
-          $ref: "#/components/schemas/DiscussionAuthor"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Discussion tags
+          example: ["online-teaching", "engagement"]
         views:
           type: integer
           description: Number of views
@@ -2602,16 +2677,90 @@ components:
           type: integer
           description: Number of replies
           example: 8
+        trendingScore:
+          type: number
+          description: Calculated trending score
+          example: 12.5
         createdAt:
           type: string
           format: date-time
           description: Creation timestamp
           example: "2023-07-01T10:30:00Z"
 
-    CategoryStats:
+    DiscussionFeedItem:
       type: object
       properties:
         _id:
+          type: string
+          description: Discussion ID
+          example: "64a1b2c3d4e5f6789abcdef0"
+        title:
+          type: string
+          description: Discussion title
+          example: "Best practices for online teaching"
+        content:
+          type: string
+          description: Discussion content
+          example: "I would like to share some effective strategies..."
+        category:
+          type: string
+          description: Discussion category
+          example: "Teaching Tips & Strategies"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Discussion tags
+          example: ["online-teaching", "engagement"]
+        createdBy:
+          type: string
+          description: User ID who created the discussion
+          example: "64a1b2c3d4e5f6789abcdef1"
+        views:
+          type: integer
+          description: Number of views
+          example: 25
+        replyCount:
+          type: integer
+          description: Number of replies
+          example: 8
+        lastReplyAt:
+          type: string
+          format: date-time
+          description: Timestamp of last reply
+          example: "2023-07-01T10:30:00Z"
+        trendingScore:
+          type: number
+          description: Calculated trending score
+          example: 12.5
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2023-07-01T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2023-07-01T10:30:00Z"
+        user:
+          type: object
+          properties:
+            firstName:
+              type: string
+              example: "John"
+            lastName:
+              type: string
+              example: "Doe"
+            avatarUrl:
+              type: string
+              nullable: true
+              example: "https://res.cloudinary.com/example/image/upload/v1234567890/avatar.jpg"
+
+    CategoryStats:
+      type: object
+      properties:
+        category:
           type: string
           description: Category name
           example: "Teaching Tips & Strategies"
@@ -2619,18 +2768,18 @@ components:
           type: integer
           description: Number of posts in this category
           example: 45
-        uniqueMembers:
+        members:
           type: integer
-          description: Number of unique members who posted in this category
+          description: Number of unique members who participated in this category
           example: 32
-        totalReplies:
-          type: integer
-          description: Total replies in this category
-          example: 120
 
     CommunityOverview:
       type: object
       properties:
+        activeMembers:
+          type: integer
+          description: Number of unique members who participated
+          example: 85
         totalDiscussions:
           type: integer
           description: Total number of discussions
@@ -2639,10 +2788,6 @@ components:
           type: integer
           description: Total number of replies
           example: 450
-        uniqueMembers:
-          type: integer
-          description: Number of unique members who participated
-          example: 85
 
     ErrorResponse:
       type: object
