@@ -5,6 +5,7 @@ const resourceFile = require("../models/resourceFile");
 const resourcePurchase = require("../models/resourcePurchase");
 const User = require("../models/User");
 const { errorResponse, successResponse } = require("../utils/response");
+const { sendResourceStatusUpdateEmail } = require("../config/email");
 
 exports.createResource = async (req, res) => {
   // track created DB docs and uploaded publicIds for cleanup on failure
@@ -76,10 +77,10 @@ exports.createResource = async (req, res) => {
     }
 
     let resourceStatus = "pending"; // default publish → pending
-    if (saveAsDraft == true) {
+    if (saveAsDraft) {
       resourceStatus = "draft";
     }
-
+    console.log("resourceStatus is", resourceStatus);
     // Generate a temporary resource ID for file organization
     const tempResourceId = new mongoose.Types.ObjectId();
 
@@ -235,13 +236,13 @@ exports.updateResource = async (req, res) => {
     const userId = req.user.userId;
     const userRole = req.user.role;
 
-    const resource = await resource.findById(id);
-    if (!resource || resource.isDeleted) {
+    const resourceDoc = await resource.findById(id);
+    if (!resourceDoc || resourceDoc.isDeleted) {
       return errorResponse(res, "resource not found", 404);
     }
 
     // Authorization: only owner or admin can update
-    if (!resource.createdBy.userId.equals(userId) && userRole !== "admin") {
+    if (!resourceDoc.createdBy.userId.equals(userId) && userRole !== "admin") {
       return errorResponse(res, "Not authorized to update this resource", 403);
     }
 
@@ -258,27 +259,38 @@ exports.updateResource = async (req, res) => {
       curriculumType,
       subject,
     } = req.body;
+    
+    console.log("Request body values:", { isFree, price, currency });
 
     // Apply updates only if provided
-    if (title) resource.title = title;
-    if (description) resource.description = description;
-    if (type) resource.type = type;
-    if (publishing) resource.publishing = publishing;
-    if (ageRange) resource.ageRange = ageRange;
-    if (curriculum) resource.curriculum = curriculum;
-    if (curriculumType) resource.curriculumType = curriculumType;
-    if (subject) resource.subject = subject;
+    if (title) resourceDoc.title = title;
+    if (description) resourceDoc.description = description;
+    if (type) resourceDoc.type = type;
+    if (publishing) resourceDoc.publishing = publishing;
+    if (ageRange) resourceDoc.ageRange = ageRange;
+    if (curriculum) resourceDoc.curriculum = curriculum;
+    if (curriculumType) resourceDoc.curriculumType = curriculumType;
+    if (subject) resourceDoc.subject = subject;
 
-    if (typeof isFree !== "undefined") {
-      resource.isFree = isFree;
-      resource.price = isFree ? 0 : price || resource.price;
-      resource.currency = isFree ? null : currency || resource.currency;
+    // Convert string boolean to actual boolean
+    const isFreeBoolean = String(isFree).toLowerCase() === 'true';
+    console.log("isFree:", isFree, "isFreeBoolean:", isFreeBoolean, "currency:", currency, "price:", price);
+    
+    resourceDoc.isFree = isFreeBoolean;
+    resourceDoc.price = isFreeBoolean ? 0 : price || resourceDoc.price;
+    
+    if (isFreeBoolean) {
+      resourceDoc.currency = null;
+    } else {
+      resourceDoc.currency = currency || resourceDoc.currency;
     }
+    
+    console.log("Final currency:", resourceDoc.currency);
 
     // Banner update (replace existing)
     if (req.files?.banner?.length > 0) {
-      if (resource.coverPhoto) {
-        const oldBanner = await resourceFile.findById(resource.coverPhoto);
+      if (resourceDoc.coverPhoto) {
+        const oldBanner = await resourceFile.findById(resourceDoc.coverPhoto);
         if (oldBanner) {
           await deleteImage(oldBanner.publicId);
           await oldBanner.deleteOne();
@@ -305,7 +317,7 @@ exports.updateResource = async (req, res) => {
         uploadedBy: userId,
       });
 
-      resource.coverPhoto = bannerDoc._id;
+      resourceDoc.coverPhoto = bannerDoc._id;
     }
 
     // Preview Images (append new ones, keep old unless explicitly deleted later)
@@ -330,7 +342,7 @@ exports.updateResource = async (req, res) => {
 
       const validPreviews = newPreviewDocs.filter(Boolean);
       if (validPreviews.length > 0) {
-        resource.previewImages.push(...validPreviews.map((f) => f._id));
+        resourceDoc.previewImages.push(...validPreviews.map((f) => f._id));
       }
     }
 
@@ -356,7 +368,7 @@ exports.updateResource = async (req, res) => {
 
       const validFiles = newFileDocs.filter(Boolean);
       if (validFiles.length > 0) {
-        resource.mainFile = validFiles[0]._id; // only one main file allowed
+        resourceDoc.mainFile = validFiles[0]._id; // only one main file allowed
       }
     }
 
@@ -367,20 +379,20 @@ exports.updateResource = async (req, res) => {
         req.body.status &&
         ["approved", "rejected", "pending"].includes(req.body.status)
       ) {
-        resource.status = req.body.status;
+        resourceDoc.status = req.body.status;
         if (req.body.status === "approved") {
-          resource.approvedBy = userId;
+          resourceDoc.approvedBy = userId;
         }
       }
     } else {
       // Any user update puts resource back to pending
-      resource.status = "pending";
-      resource.approvedBy = null;
+      resourceDoc.status = "pending";
+      resourceDoc.approvedBy = null;
     }
 
-    await resource.save();
+    await resourceDoc.save();
 
-    return successResponse(res, { resource }, "resource updated successfully");
+    return successResponse(res, { resource: resourceDoc }, "resource updated successfully");
   } catch (err) {
     console.error("updateResource error:", err);
     return errorResponse(res, "Failed to update resource", 500);
@@ -402,29 +414,27 @@ exports.updateResourceStatus = async (req, res) => {
       return errorResponse(res, "Invalid status value", 400);
     }
 
-    const resource = await resource
+    const resourceDoc = await resource
       .findById(resourceId)
       .populate("createdBy.userId", "email firstName lastName");
 
-    if (!resource || resource.isDeleted) {
+    if (!resourceDoc || resourceDoc.isDeleted) {
       return errorResponse(res, "Resource not found", 404);
     }
-
     // User (non-admin) rules
-    if (userRole !== "admin") {
-      if (status !== "pending") {
+    if (userRole != "admin") {
+      if (status != "pending") {
         return errorResponse(res, "You can only set status to pending", 403);
       }
 
-      if (resourceDoc.createdBy.userId.toString() !== userId.toString()) {
+      if (resourceDoc.createdBy.userId._id.toString() != userId.toString()) {
         return errorResponse(
           res,
           "Not authorized to update this resource",
           403
         );
       }
-
-      if (resourceDoc.status !== "draft") {
+      if (resourceDoc.status != "draft") {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
@@ -444,12 +454,12 @@ exports.updateResourceStatus = async (req, res) => {
       resourceDoc.approvedBy = status === "approved" ? userId : null;
     }
 
-    await resource.save();
-    if (resource.createdBy?.userId?.email) {
+    await resourceDoc.save();
+    if (resourceDoc.createdBy?.userId?.email) {
       await sendResourceStatusUpdateEmail(
-        resource.createdBy.userId.email,
-        resource.createdBy.userId.firstName,
-        resource.title,
+        resourceDoc.createdBy.userId.email,
+        resourceDoc.createdBy.userId.firstName,
+        resourceDoc.title,
         status
       );
     }
@@ -549,14 +559,14 @@ exports.deleteResource = async (req, res) => {
     const userId = req.user.userId;
     const userRole = req.user.role;
 
-    const resource = await resource.findById(resourceId);
-    if (!resource) {
+    const foundResource = await resource.findById(resourceId);
+    if (!foundResource) {
       return errorResponse(res, "Resource not found", 404);
     }
 
     // Only owner or admin can delete
     if (
-      resource.createdBy.userId.toString() !== userId.toString() &&
+      foundResource.createdBy.userId.toString() !== userId.toString() &&
       userRole !== "admin"
     ) {
       return errorResponse(
@@ -567,8 +577,8 @@ exports.deleteResource = async (req, res) => {
     }
 
     // Soft delete
-    resource.isDeleted = true;
-    await resource.save();
+    foundResource.isDeleted = true;
+    await foundResource.save();
 
     // (Optional) Hard delete related files if needed
     // await ResourceFile.deleteMany({ resourceId });
