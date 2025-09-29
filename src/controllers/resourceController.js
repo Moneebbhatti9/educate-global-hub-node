@@ -438,8 +438,8 @@ exports.updateResourceStatus = async (req, res) => {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
-      resourceDoc.status = "pending";
-      resourceDoc.approvedBy = null; // reset approval
+      resource.status = "pending";
+      resource.approvedBy = null; // reset approval
     } else {
       // Admin rules
       if (!["approved", "rejected", "pending"].includes(status)) {
@@ -450,8 +450,8 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      resourceDoc.status = status;
-      resourceDoc.approvedBy = status === "approved" ? userId : null;
+      resource.status = status;
+      resource.approvedBy = status === "approved" ? userId : null;
     }
 
     await resourceDoc.save();
@@ -466,7 +466,7 @@ exports.updateResourceStatus = async (req, res) => {
     return successResponse(
       res,
       {
-        resource: resourceDoc,
+        resource: resource,
       },
       "Resource status updated successfully"
     );

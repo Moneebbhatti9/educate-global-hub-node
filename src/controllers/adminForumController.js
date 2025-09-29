@@ -42,29 +42,57 @@ exports.getAdminDiscussions = async (req, res) => {
       limit = 10,
     } = req.query;
 
-    const filter = {};
-    if (status === "active") filter.isActive = true;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+    const skip = (pageNum - 1) * pageSize;
+
+    // ---- Filters ----
+    const filter = { isActive: true }; // exclude deleted discussions
     if (status === "reported") filter["reports.0"] = { $exists: true };
     if (status === "pinned") filter.isPinned = true;
     if (category) filter.category = category;
 
+    // ---- Sorting ----
     let sort = { createdAt: -1 };
     if (sortBy === "trending") sort = { views: -1 };
     if (sortBy === "recent") sort = { createdAt: -1 };
 
-    const skip = (page - 1) * limit;
-    const [data, total] = await Promise.all([
+    // ---- Fetch discussions + total ----
+    const [discussions, total] = await Promise.all([
       Discussion.find(filter)
         .populate("createdBy", "firstName lastName avatarUrl")
         .sort(sort)
         .skip(skip)
-        .limit(Number(limit)),
+        .limit(pageSize)
+        .lean(),
       Discussion.countDocuments(filter),
     ]);
 
-    return successResponse(res, { data, total, page, limit });
+    // ---- Attach reply counts ----
+    const ids = discussions.map((d) => d._id);
+    const replyCounts = await Reply.aggregate([
+      { $match: { discussion: { $in: ids } } },
+      { $group: { _id: "$discussion", count: { $sum: 1 } } },
+    ]);
+
+    const countMap = replyCounts.reduce((acc, item) => {
+      acc[item._id.toString()] = item.count;
+      return acc;
+    }, {});
+
+    discussions.forEach((d) => {
+      d.replyCount = countMap[d._id.toString()] || 0;
+    });
+
+    return successResponse(res, {
+      data: discussions,
+      total,
+      page: pageNum,
+      limit: pageSize,
+    });
   } catch (err) {
-    return errorResponse(res, "Failed to fetch admin discussions", err);
+    console.error("getAdminDiscussions error:", err);
+    return errorResponse(res, "Failed to fetch admin discussions", 500);
   }
 };
 
