@@ -28,6 +28,7 @@ const adminDashboardRoutes = require("./routes/adminDashboard");
 const discussionRoutes = require("./routes/discussion");
 const replyRoutes = require("./routes/reply");
 const adminForumRoutes = require("./routes/adminForum");
+const resourceRoutes = require("./routes/resource");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -106,11 +107,6 @@ const speedLimiter = slowDown({
     return (used - delayAfter) * 500;
   },
 });
-applyMiddlewares(app);
-
-app.use(limiter);
-app.use(speedLimiter);
-
 // Logging middleware
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
@@ -124,6 +120,13 @@ app.use(compression());
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Apply custom middlewares (including Swagger docs)
+applyMiddlewares(app);
+
+// Rate limiting (after body parsing but before routes)
+app.use(limiter);
+app.use(speedLimiter);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -151,6 +154,7 @@ app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
 app.use(`/api/${apiVersion}/discussion`, discussionRoutes);
 app.use(`/api/${apiVersion}/reply`, replyRoutes);
 app.use(`/api/${apiVersion}/adminForum`, adminForumRoutes);
+app.use(`/api/${apiVersion}/resources`, resourceRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

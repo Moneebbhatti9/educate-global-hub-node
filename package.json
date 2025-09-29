@@ -11,7 +11,8 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "start:prod": "npm start --omit=dev"
+    "start:prod": "npm start --omit=dev",
+    "create-admin": "node scripts/createAdminUser.js"
   },
   "keywords": [
     "education",

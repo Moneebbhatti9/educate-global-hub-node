@@ -3,7 +3,7 @@ const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
 
 exports.createDiscussion = async (req, res) => {
-  try {    
+  try {
     const { title, content, category, tags } = req.body;
 
     if (!title || !category) {
@@ -27,14 +27,13 @@ exports.createDiscussion = async (req, res) => {
       tags: Array.isArray(tags) ? tags : [],
       createdBy: req.user.userId,
     });
-
+    await discussion.populate("createdBy", "firstName lastName avatarUrl");
     const io = req.app.get("io");
     if (io) io.emit("newDiscussion", discussion);
 
     return successResponse(res, discussion, "Discussion created successfully");
   } catch (err) {
     console.log(err);
-    
     return errorResponse(res, "Failed to create discussion", 500);
   }
 };
@@ -44,7 +43,10 @@ exports.toggleLikeDiscussion = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.userId;
 
-    const discussion = await Discussion.findById(id);
+    const discussion = await Discussion.findById(id).populate(
+      "createdBy",
+      "firstName lastName avatarUrl"
+    );
     if (!discussion) return errorResponse(res, "Discussion not found", 404);
 
     const alreadyLiked = discussion.likes.includes(userId);
@@ -90,7 +92,7 @@ exports.reportDiscussion = async (req, res) => {
         },
       },
       { new: true }
-    );
+    ).populate("createdBy", "firstName lastName avatarUrl");
 
     if (!discussion) return errorResponse(res, "Discussion not found", 404);
 
@@ -232,6 +234,15 @@ exports.getDiscussionFeed = async (req, res) => {
         },
       },
       {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
         $project: {
           title: 1,
           content: 1,
@@ -244,6 +255,9 @@ exports.getDiscussionFeed = async (req, res) => {
           replyCount: 1,
           lastReplyAt: 1,
           trendingScore: 1,
+          "user.firstName": 1,
+          "user.lastName": 1,
+          "user.avatarUrl": 1,
         },
       },
     ];
@@ -424,6 +438,7 @@ exports.getRelatedDiscussions = async (req, res) => {
       _id: { $ne: id },
       category: discussion.category,
     })
+      .populate("createdBy", "firstName lastName avatarUrl")
       .sort({ createdAt: -1 })
       .limit(5);
 
