@@ -7,6 +7,7 @@ const User = require("../models/User");
 const { errorResponse, successResponse } = require("../utils/response");
 const { sendResourceStatusUpdateEmail } = require("../config/email");
 
+
 exports.createResource = async (req, res) => {
   // track created DB docs and uploaded publicIds for cleanup on failure
   const createdFileDocs = [];
