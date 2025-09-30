@@ -852,7 +852,7 @@ exports.getResourceByIdAdmin = async (req, res) => {
     if (!resourceDoc) {
       return errorResponse(res, "Resource not found", 404);
     }
-
+    // commit 
     const formattedResource = {
       id: resourceDoc._id,
       title: resourceDoc.title,
