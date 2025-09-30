@@ -9,6 +9,7 @@ const {
   searchResources,
   getAllResourcesMainPage,
   getResourceById,
+  getResourceByIdAdmin,
 } = require("../controllers/resourceController");
 const { authenticateToken } = require("../middleware/auth");
 const router = express.Router();
@@ -82,5 +83,11 @@ router.get("/get-all-resources", getAllResourcesMainPage);
 
 router.get("/get-resource-by-id/:id", getResourceById);
 
+router.get(
+  "/get-resource-by-id-admin/:id",
+  authenticateToken,
+  authorizeRoles(["admin"]),
+  getResourceByIdAdmin
+);
 
 module.exports = router;

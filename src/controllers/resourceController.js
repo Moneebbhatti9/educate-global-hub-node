@@ -833,3 +833,54 @@ exports.getResourceById = async (req, res) => {
     return errorResponse(res, "Failed to fetch resource", 500);
   }
 };
+
+// Admin: Get Resource by ID
+exports.getResourceByIdAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const resourceDoc = await resource
+      .findOne({ _id: id, isDeleted: false }) // exclude only deleted
+      .populate({
+        path: "createdBy.userId",
+        select: "firstName lastName email role",
+      })
+      .populate("coverPhoto")
+      .populate("previewImages")
+      .populate("mainFile");
+
+    if (!resourceDoc) {
+      return errorResponse(res, "Resource not found", 404);
+    }
+
+    const formattedResource = {
+      id: resourceDoc._id,
+      title: resourceDoc.title,
+      description: resourceDoc.description,
+      subject: resourceDoc.subject,
+      ageRange: resourceDoc.ageRange,
+      curriculum: resourceDoc.curriculum,
+      curriculumType: resourceDoc.curriculumType,
+      price: resourceDoc.isFree
+        ? "Free"
+        : `${resourceDoc.currency} ${resourceDoc.price}`,
+      status: resourceDoc.status,
+      thumbnail: resourceDoc.coverPhoto?.url || null,
+      previews: resourceDoc.previewImages?.map((img) => img.url) || [],
+      file: resourceDoc.mainFile || null,
+      author: resourceDoc.createdBy?.userId
+        ? `${resourceDoc.createdBy.userId.firstName} ${resourceDoc.userId.lastName}`
+        : "Unknown",
+      createdAt: resourceDoc.createdAt,
+    };
+
+    return successResponse(
+      res,
+      formattedResource,
+      "Admin: Resource fetched successfully!"
+    );
+  } catch (err) {
+    console.error("getResourceByIdAdmin error:", err);
+    return errorResponse(res, "Failed to fetch resource", 500);
+  }
+};
