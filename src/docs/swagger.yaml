@@ -10,7 +10,7 @@ info:
 servers:
   - url: http://localhost:5000/api
     description: Development server
-  - url: https://api.educateglobalhub.com/api
+  - url: https://educate-global-hub-node.onrender.com/api
     description: Production server
 
 security:
