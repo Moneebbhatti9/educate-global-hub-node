@@ -75,12 +75,13 @@ exports.createResource = async (req, res) => {
         );
       }
     }
+    const saveAsDraftFlag = saveAsDraft === true || saveAsDraft === "true";
 
     let resourceStatus = "pending"; // default publish → pending
-    if (saveAsDraft) {
+    if (saveAsDraftFlag == true) {
       resourceStatus = "draft";
     }
-    // Generate a temporary resource ID for file organization
+    // Generate a temporary resource ID fosr file organization
     const tempResourceId = new mongoose.Types.ObjectId();
 
     // ---- upload banner and create ResourceFile doc (coverPhoto) ----
