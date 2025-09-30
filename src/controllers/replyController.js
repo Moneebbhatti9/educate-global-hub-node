@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
@@ -53,19 +54,44 @@ exports.getRepliesForDiscussion = async (req, res) => {
     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
     const skip = (pageNum - 1) * pageSize;
 
-    const replies = await Reply.find({ discussion: discussionId })
-      .populate("createdBy", "firstName lastName avatarUrl")
-      .populate({
-        path: "parentReply",
-        select: "content createdBy",
-        populate: {
-          path: "createdBy",
-          select: "firstName lastName avatarUrl",
+    const replies = await Reply.aggregate([
+      {
+        $match: {
+          discussion: new mongoose.Types.ObjectId(discussionId),
         },
-      })
-      .sort({ createdAt: 1 })
-      .skip(skip)
-      .limit(pageSize);
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "author",
+        },
+      },
+      { $unwind: "$author" },
+      {
+        $lookup: {
+          from: "replies",
+          let: { parentId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$parentReply", "$$parentId"] } } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "createdBy",
+                foreignField: "_id",
+                as: "author",
+              },
+            },
+            { $unwind: "$author" },
+          ],
+          as: "children",
+        },
+      },
+      { $sort: { createdAt: 1 } },
+      { $skip: skip },
+      { $limit: pageSize },
+    ]);
 
     const total = await Reply.countDocuments({ discussion: discussionId });
 
@@ -77,13 +103,53 @@ exports.getRepliesForDiscussion = async (req, res) => {
         total,
         data: replies,
       },
-      "Replies fetched succesfully"
+      "Replies fetched successfully"
     );
   } catch (err) {
     console.error("getRepliesForDiscussion error:", err);
     return errorResponse(res, "Failed to fetch replies", 500);
   }
 };
+
+//   try {
+//     const { discussionId } = req.params;
+//     const { page = 1, limit = 10 } = req.query;
+
+//     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+//     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+//     const skip = (pageNum - 1) * pageSize;
+
+//     const replies = await Reply.find({ discussion: discussionId })
+//       .populate("createdBy", "firstName lastName avatarUrl")
+//       .populate({
+//         path: "parentReply",
+//         select: "content createdBy",
+//         populate: {
+//           path: "createdBy",
+//           select: "firstName lastName avatarUrl",
+//         },
+//       })
+//       .sort({ createdAt: 1 })
+//       .skip(skip)
+//       .limit(pageSize);
+
+//     const total = await Reply.countDocuments({ discussion: discussionId });
+
+//     return successResponse(
+//       res,
+//       {
+//         page: pageNum,
+//         limit: pageSize,
+//         total,
+//         data: replies,
+//       },
+//       "Replies fetched succesfully"
+//     );
+//   } catch (err) {
+//     console.error("getRepliesForDiscussion error:", err);
+//     return errorResponse(res, "Failed to fetch replies", 500);
+//   }
+// };
 
 exports.toggleLikeReply = async (req, res) => {
   try {

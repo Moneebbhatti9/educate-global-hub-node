@@ -11,7 +11,7 @@ const {
   getResourceById,
   getResourceByIdAdmin,
 } = require("../controllers/resourceController");
-const { authenticateToken } = require("../middleware/auth");
+const { authenticateToken, authorizeRoles } = require("../middleware/auth");
 const router = express.Router();
 
 //  Multer setup (memory storage for cloudinary)

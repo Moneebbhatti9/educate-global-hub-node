@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
@@ -123,6 +124,7 @@ exports.getDiscussionById = async (req, res) => {
     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
     const skip = (pageNum - 1) * pageSize;
 
+    // bump views count
     const discussion = await Discussion.findByIdAndUpdate(
       id,
       { $inc: { views: 1 } },
@@ -133,15 +135,49 @@ exports.getDiscussionById = async (req, res) => {
       return errorResponse(res, "Discussion not found", 404);
     }
 
-    const [replies, totalReplies] = await Promise.all([
-      Reply.find({ discussion: id })
-        .populate("createdBy", "firstName lastName avatarUrl")
-        .populate("parentReply", "content createdBy")
-        .sort({ createdAt: 1 })
-        .skip(skip)
-        .limit(pageSize),
-      Reply.countDocuments({ discussion: id }),
+    // replies with nested children (1 level deep)
+    const replies = await Reply.aggregate([
+      {
+        $match: {
+          discussion: new mongoose.Types.ObjectId(id),
+          parentReply: null, // only top-level
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "createdBy",
+          foreignField: "_id",
+          as: "author",
+        },
+      },
+      { $unwind: "$author" },
+      {
+        $lookup: {
+          from: "replies",
+          let: { parentId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$parentReply", "$$parentId"] } } },
+            {
+              $lookup: {
+                from: "users",
+                localField: "createdBy",
+                foreignField: "_id",
+                as: "author",
+              },
+            },
+            { $unwind: "$author" },
+            { $sort: { createdAt: 1 } },
+          ],
+          as: "children",
+        },
+      },
+      { $sort: { createdAt: 1 } },
+      { $skip: skip },
+      { $limit: pageSize },
     ]);
+
+    const totalReplies = await Reply.countDocuments({ discussion: id });
 
     return successResponse(res, {
       discussion,
@@ -154,6 +190,7 @@ exports.getDiscussionById = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("getDiscussionById error:", err);
     return errorResponse(res, "Failed to fetch discussion", 500);
   }
 };
