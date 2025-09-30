@@ -80,7 +80,6 @@ exports.createResource = async (req, res) => {
     if (saveAsDraft) {
       resourceStatus = "draft";
     }
-    console.log("resourceStatus is", resourceStatus);
     // Generate a temporary resource ID for file organization
     const tempResourceId = new mongoose.Types.ObjectId();
 
@@ -259,8 +258,6 @@ exports.updateResource = async (req, res) => {
       curriculumType,
       subject,
     } = req.body;
-    
-    console.log("Request body values:", { isFree, price, currency });
 
     // Apply updates only if provided
     if (title) resourceDoc.title = title;
@@ -273,19 +270,15 @@ exports.updateResource = async (req, res) => {
     if (subject) resourceDoc.subject = subject;
 
     // Convert string boolean to actual boolean
-    const isFreeBoolean = String(isFree).toLowerCase() === 'true';
-    console.log("isFree:", isFree, "isFreeBoolean:", isFreeBoolean, "currency:", currency, "price:", price);
-    
+    const isFreeBoolean = String(isFree).toLowerCase() === "true";
     resourceDoc.isFree = isFreeBoolean;
     resourceDoc.price = isFreeBoolean ? 0 : price || resourceDoc.price;
-    
+
     if (isFreeBoolean) {
       resourceDoc.currency = null;
     } else {
       resourceDoc.currency = currency || resourceDoc.currency;
     }
-    
-    console.log("Final currency:", resourceDoc.currency);
 
     // Banner update (replace existing)
     if (req.files?.banner?.length > 0) {
@@ -392,7 +385,11 @@ exports.updateResource = async (req, res) => {
 
     await resourceDoc.save();
 
-    return successResponse(res, { resource: resourceDoc }, "resource updated successfully");
+    return successResponse(
+      res,
+      { resource: resourceDoc },
+      "resource updated successfully"
+    );
   } catch (err) {
     console.error("updateResource error:", err);
     return errorResponse(res, "Failed to update resource", 500);
@@ -405,7 +402,6 @@ exports.updateResourceStatus = async (req, res) => {
     const { status } = req.body;
     const userId = req.user.userId;
     const userRole = req.user.role;
-
     // validate input
     if (
       !status ||
@@ -438,8 +434,8 @@ exports.updateResourceStatus = async (req, res) => {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
-      resource.status = "pending";
-      resource.approvedBy = null; // reset approval
+      resourceDoc.status = "pending";
+      resourceDoc.approvedBy = null; // reset approval
     } else {
       // Admin rules
       if (!["approved", "rejected", "pending"].includes(status)) {
@@ -450,8 +446,8 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      resource.status = status;
-      resource.approvedBy = status === "approved" ? userId : null;
+      resourceDoc.status = status;
+      resourceDoc.approvedBy = status === "approved" ? userId : null;
     }
 
     await resourceDoc.save();
@@ -466,7 +462,7 @@ exports.updateResourceStatus = async (req, res) => {
     return successResponse(
       res,
       {
-        resource: resource,
+        resource: resourceDoc,
       },
       "Resource status updated successfully"
     );
@@ -482,7 +478,7 @@ exports.getMyResources = async (req, res) => {
     const { search, status, page = 1, limit = 10 } = req.query;
 
     // base query for user's resources
-    let query = { "createdBy.userId": userId };
+    let query = { "createdBy.userId": userId, isDeleted: false };
 
     if (status && status !== "all") {
       query.status = status;
@@ -505,6 +501,7 @@ exports.getMyResources = async (req, res) => {
 
     const totalResources = await resource.countDocuments({
       "createdBy.userId": userId,
+      isDeleted: false,
     });
 
     // --- Sales + Earnings ---
@@ -792,39 +789,43 @@ exports.getResourceById = async (req, res) => {
         select: "firstName lastName email role",
       })
       .populate("coverPhoto")
-      .populate("files"); // assuming files are in a media collection
+      .populate("previewImages")
+      .populate("mainFile");
 
     if (!resourceDoc) {
       return errorResponse(res, "Resource not found", 404);
     }
 
-    // For public API, don’t expose drafts/pending
+    // For public API (unauthenticated users), don’t expose drafts/pending
     if (!req.user && resourceDoc.status !== "approved") {
       return errorResponse(res, "Resource not available", 403);
     }
+
     const formattedResource = {
       id: resourceDoc._id,
       title: resourceDoc.title,
       description: resourceDoc.description,
       subject: resourceDoc.subject,
-      age: resourceDoc.age,
+      ageRange: resourceDoc.ageRange,
       curriculum: resourceDoc.curriculum,
+      curriculumType: resourceDoc.curriculumType,
       price: resourceDoc.isFree
         ? "Free"
         : `${resourceDoc.currency} ${resourceDoc.price}`,
       status: resourceDoc.status,
       thumbnail: resourceDoc.coverPhoto?.url || null,
+      previews: resourceDoc.previewImages?.map((img) => img.url) || [],
+      file: resourceDoc.mainFile || null, // you can return whole doc or just url
       author: resourceDoc.createdBy?.userId
         ? `${resourceDoc.createdBy.userId.firstName} ${resourceDoc.createdBy.userId.lastName}`
         : "Unknown",
-      files: resourceDoc.files || [],
       createdAt: resourceDoc.createdAt,
     };
 
     return successResponse(
       res,
       formattedResource,
-      "Resource fetched succesfully!"
+      "Resource fetched successfully!"
     );
   } catch (err) {
     console.error("getResourceById error:", err);
