@@ -99,13 +99,13 @@ paths:
       tags:
         - Resources
       summary: Create a new resource
-      description: Create a new educational resource with files and metadata
+      description: Create a new educational resource with Cloudinary URLs (files should be uploaded separately using the upload API)
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
               required:
@@ -116,9 +116,9 @@ paths:
                 - curriculum
                 - curriculumType
                 - subject
-                - banner
-                - previews
-                - files
+                - coverPhotoUrl
+                - previewImageUrls
+                - mainFileUrl
               properties:
                 title:
                   type: string
@@ -132,18 +132,21 @@ paths:
                   type: string
                   enum:
                     [
-                      worksheet,
-                      lesson_plan,
-                      assessment,
-                      activity,
-                      presentation,
-                      other,
+                      "Assembly",
+                      "Assessment and revision",
+                      "Game/puzzle/quiz",
+                      "Audio, music & video",
+                      "Lesson (complete)",
+                      "Other",
+                      "Unit of work",
+                      "Visual aid/Display",
+                      "Worksheet/Activity",
                     ]
                   description: Type of educational resource
-                  example: "worksheet"
+                  example: "Worksheet/Activity"
                 visibility:
                   type: string
-                  enum: [public, private]
+                  enum: ["public", "private", "school only", "unlisted"]
                   description: Visibility setting for the resource
                   example: "public"
                 isFree:
@@ -156,6 +159,7 @@ paths:
                   example: 9.99
                 currency:
                   type: string
+                  enum: ["USD", "EUR", "GBP", "PKR"]
                   description: Currency code (required if not free)
                   example: "USD"
                 saveAsDraft:
@@ -164,36 +168,79 @@ paths:
                   example: false
                 ageRange:
                   type: string
+                  enum:
+                    [
+                      "3-5",
+                      "5-7",
+                      "7-11",
+                      "11-14",
+                      "14-16",
+                      "16+",
+                      "Age not applicable",
+                    ]
                   description: Target age range for the resource
-                  example: "6-8 years"
+                  example: "7-11"
                 curriculum:
                   type: string
+                  enum:
+                    [
+                      "No curriculum",
+                      "American",
+                      "Australian",
+                      "Canadian",
+                      "English",
+                      "International",
+                      "Irish",
+                      "New Zealand",
+                      "Northern Irish",
+                      "Scottish",
+                      "Welsh",
+                      "Zambian",
+                    ]
                   description: Curriculum framework
-                  example: "Common Core"
+                  example: "American"
                 curriculumType:
                   type: string
+                  enum:
+                    [
+                      "No curriculum type",
+                      "Cambridge",
+                      "Foundation Stage",
+                      "IB PYP",
+                      "IPC",
+                      "IPC/IEYC",
+                      "Montessori",
+                      "Northern Ireland Curriculum",
+                      "School's own",
+                      "Waldorf/Steiner",
+                    ]
                   description: Type of curriculum
-                  example: "Mathematics"
+                  example: "School's own"
                 subject:
                   type: string
                   description: Subject area
                   example: "Mathematics"
-                banner:
+                coverPhotoUrl:
                   type: string
-                  format: binary
-                  description: Cover photo for the resource (required)
-                previews:
+                  format: uri
+                  description: Cloudinary URL for cover photo (upload via /api/v1/upload/document first)
+                  example: "https://res.cloudinary.com/example/image/upload/v1234567890/cover.jpg"
+                previewImageUrls:
                   type: array
                   items:
                     type: string
-                    format: binary
-                  description: Preview images (1-5 images)
-                files:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
-                  description: Main resource files (1-3 files)
+                    format: uri
+                  description: Array of Cloudinary URLs for preview images (upload via /api/v1/upload/document first)
+                  example:
+                    [
+                      "https://res.cloudinary.com/example/image/upload/v1234567890/preview1.jpg",
+                      "https://res.cloudinary.com/example/image/upload/v1234567890/preview2.jpg",
+                    ]
+                mainFileUrl:
+                  type: string
+                  format: uri
+                  description: Cloudinary URL for main resource file (upload via /api/v1/upload/document first)
+                  example: "https://res.cloudinary.com/example/image/upload/v1234567890/worksheet.pdf"
       responses:
         "201":
           description: Resource created successfully
@@ -234,7 +281,7 @@ paths:
       tags:
         - Resources
       summary: Update an existing resource
-      description: Update resource details, files, and metadata
+      description: Update resource details and file URLs (files should be uploaded separately using the upload API)
       security:
         - bearerAuth: []
       parameters:
@@ -248,7 +295,7 @@ paths:
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
               properties:
@@ -263,17 +310,20 @@ paths:
                   type: string
                   enum:
                     [
-                      worksheet,
-                      lesson_plan,
-                      assessment,
-                      activity,
-                      presentation,
-                      other,
+                      "Assembly",
+                      "Assessment and revision",
+                      "Game/puzzle/quiz",
+                      "Audio, music & video",
+                      "Lesson (complete)",
+                      "Other",
+                      "Unit of work",
+                      "Visual aid/Display",
+                      "Worksheet/Activity",
                     ]
                   description: Updated resource type
                 publishing:
                   type: string
-                  enum: [public, private]
+                  enum: ["public", "private", "school only", "unlisted"]
                   description: Updated visibility setting
                 isFree:
                   type: boolean
@@ -283,37 +333,82 @@ paths:
                   description: Updated price
                 currency:
                   type: string
+                  enum: ["USD", "EUR", "GBP", "PKR"]
                   description: Updated currency
                 ageRange:
                   type: string
+                  enum:
+                    [
+                      "3-5",
+                      "5-7",
+                      "7-11",
+                      "11-14",
+                      "14-16",
+                      "16+",
+                      "Age not applicable",
+                    ]
                   description: Updated age range
                 curriculum:
                   type: string
+                  enum:
+                    [
+                      "No curriculum",
+                      "American",
+                      "Australian",
+                      "Canadian",
+                      "English",
+                      "International",
+                      "Irish",
+                      "New Zealand",
+                      "Northern Irish",
+                      "Scottish",
+                      "Welsh",
+                      "Zambian",
+                    ]
                   description: Updated curriculum
                 curriculumType:
                   type: string
+                  enum:
+                    [
+                      "No curriculum type",
+                      "Cambridge",
+                      "Foundation Stage",
+                      "IB PYP",
+                      "IPC",
+                      "IPC/IEYC",
+                      "Montessori",
+                      "Northern Ireland Curriculum",
+                      "School's own",
+                      "Waldorf/Steiner",
+                    ]
                   description: Updated curriculum type
                 subject:
                   type: string
                   description: Updated subject
                 status:
                   type: string
-                  enum: [draft, pending, approved, rejected]
+                  enum: ["draft", "pending", "approved", "rejected"]
                   description: Status (admin only)
-                coverPhoto:
+                coverPhotoUrl:
                   type: string
-                  format: binary
-                  description: New cover photo
-                previewImages:
+                  format: uri
+                  description: New cover photo URL (upload via /api/v1/upload/document first)
+                  example: "https://res.cloudinary.com/example/image/upload/v1234567890/new-cover.jpg"
+                previewImageUrls:
                   type: array
                   items:
                     type: string
-                    format: binary
-                  description: Additional preview images
-                mainFile:
+                    format: uri
+                  description: New preview image URLs (upload via /api/v1/upload/document first)
+                  example:
+                    [
+                      "https://res.cloudinary.com/example/image/upload/v1234567890/new-preview1.jpg",
+                    ]
+                mainFileUrl:
                   type: string
-                  format: binary
-                  description: New main resource file
+                  format: uri
+                  description: New main resource file URL (upload via /api/v1/upload/document first)
+                  example: "https://res.cloudinary.com/example/image/upload/v1234567890/new-worksheet.pdf"
       responses:
         "200":
           description: Resource updated successfully
@@ -734,6 +829,186 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/upload/document:
+    post:
+      tags:
+        - Upload
+      summary: Upload document/file
+      description: Upload a document or file to Cloudinary and get the URL back
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - document
+              properties:
+                document:
+                  type: string
+                  format: binary
+                  description: File to upload (images, PDFs, documents, etc.)
+      responses:
+        "200":
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Document uploaded successfully"
+                  data:
+                    type: object
+                    properties:
+                      documentUrl:
+                        type: string
+                        format: uri
+                        description: Cloudinary URL of the uploaded file
+                        example: "https://res.cloudinary.com/example/image/upload/v1234567890/document.pdf"
+                      publicId:
+                        type: string
+                        description: Cloudinary public ID for deletion if needed
+                        example: "documents/abc123"
+        "400":
+          description: Bad request - no file uploaded or invalid file type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/upload/avatar:
+    post:
+      tags:
+        - Upload
+      summary: Upload user avatar
+      description: Upload a user avatar image to Cloudinary
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - avatar
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file (JPEG, PNG, WebP)
+      responses:
+        "200":
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Avatar uploaded successfully"
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl:
+                        type: string
+                        format: uri
+                        description: Cloudinary URL of the uploaded avatar
+                        example: "https://res.cloudinary.com/example/image/upload/v1234567890/avatar.jpg"
+        "400":
+          description: Bad request - no file uploaded or invalid file type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/upload/{publicId}:
+    delete:
+      tags:
+        - Upload
+      summary: Delete uploaded file
+      description: Delete a file from Cloudinary using its public ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: publicId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Cloudinary public ID of the file to delete
+          example: "documents/abc123"
+      responses:
+        "200":
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "File deleted successfully"
+                  data:
+                    type: object
+                    nullable: true
+        "400":
+          description: Bad request - invalid public ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
           content:
             application/json:
               schema:
@@ -2187,14 +2462,23 @@ components:
         createdBy:
           $ref: "#/components/schemas/CreatedBy"
         coverPhoto:
-          $ref: "#/components/schemas/ResourceFile"
+          type: string
+          description: Cover photo URL
+          example: "https://res.cloudinary.com/example/image/upload/v1234567890/cover.jpg"
         previewImages:
           type: array
           items:
-            $ref: "#/components/schemas/ResourceFile"
-          description: Preview images
+            type: string
+          description: Preview image URLs
+          example:
+            [
+              "https://res.cloudinary.com/example/image/upload/v1234567890/preview1.jpg",
+              "https://res.cloudinary.com/example/image/upload/v1234567890/preview2.jpg",
+            ]
         mainFile:
-          $ref: "#/components/schemas/ResourceFile"
+          type: string
+          description: Main resource file URL
+          example: "https://res.cloudinary.com/example/image/upload/v1234567890/worksheet.pdf"
         approvedBy:
           type: string
           nullable: true
@@ -2294,52 +2578,24 @@ components:
           type: string
           description: Author name
           example: "John Doe"
-        files:
+        previews:
           type: array
           items:
-            $ref: "#/components/schemas/ResourceFile"
-          description: Resource files
+            type: string
+          description: Preview image URLs
+          example:
+            [
+              "https://res.cloudinary.com/example/image/upload/v1234567890/preview1.jpg",
+            ]
+        file:
+          type: string
+          nullable: true
+          description: Main resource file URL
+          example: "https://res.cloudinary.com/example/image/upload/v1234567890/worksheet.pdf"
         createdAt:
           type: string
           format: date-time
           description: Creation timestamp
-
-    ResourceFile:
-      type: object
-      properties:
-        _id:
-          type: string
-          description: File ID
-          example: "64a1b2c3d4e5f6789abcdef1"
-        resourceId:
-          type: string
-          description: Associated resource ID
-          example: "64a1b2c3d4e5f6789abcdef0"
-        fileType:
-          type: string
-          enum: [cover, preview, main]
-          description: Type of file
-          example: "cover"
-        url:
-          type: string
-          description: File URL
-          example: "https://res.cloudinary.com/example/image/upload/v1234567890/file.pdf"
-        publicId:
-          type: string
-          description: Cloudinary public ID
-          example: "educate-hub/resources/64a1b2c3d4e5f6789abcdef0/cover"
-        format:
-          type: string
-          description: File format
-          example: "pdf"
-        size:
-          type: integer
-          description: File size in bytes
-          example: 1024000
-        uploadedBy:
-          type: string
-          description: User ID who uploaded the file
-          example: "64a1b2c3d4e5f6789abcdef2"
 
     CreatedBy:
       type: object

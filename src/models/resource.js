@@ -220,18 +220,14 @@ const resourceSchema = new mongoose.Schema(
       },
     },
 
-    // File references
+    // File URLs (direct Cloudinary URLs from frontend uploads)
     coverPhoto: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ResourceFile",
+      type: String,
       required: true,
     },
-    previewImages: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "ResourceFile" },
-    ],
+    previewImages: [String],
     mainFile: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ResourceFile",
+      type: String,
       required: true,
     },
 
