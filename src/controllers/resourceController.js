@@ -1,18 +1,11 @@
 const mongoose = require("mongoose");
-const { uploadImage, deleteImage } = require("../config/cloudinary");
 const resource = require("../models/resource");
-const resourceFile = require("../models/resourceFile");
 const resourcePurchase = require("../models/resourcePurchase");
 const User = require("../models/User");
 const { errorResponse, successResponse } = require("../utils/response");
 const { sendResourceStatusUpdateEmail } = require("../config/email");
 
 exports.createResource = async (req, res) => {
-  // track created DB docs and uploaded publicIds for cleanup on failure
-  const createdFileDocs = [];
-  const uploadedPublicIds = [];
-  let createdResource = null;
-
   try {
     const userId = req.user.userId;
     const userRole = req.user.role;
@@ -30,6 +23,9 @@ exports.createResource = async (req, res) => {
       curriculum,
       curriculumType,
       subject,
+      coverPhotoUrl,
+      previewImageUrls,
+      mainFileUrl,
     } = req.body;
 
     // ---- validation ----
@@ -49,16 +45,23 @@ exports.createResource = async (req, res) => {
       );
     }
 
-    // main file is mandatory per schema / UI
-    if (!req.files?.files || req.files.files.length === 0) {
-      return errorResponse(res, "At least one resource file is required", 400);
+    // Validate file URLs from frontend uploads
+    if (!coverPhotoUrl) {
+      return errorResponse(res, "Cover photo URL is required", 400);
     }
-
-    if (!req.files?.banner || req.files.banner.length === 0) {
-      return errorResponse(res, "Banner image is required", 400);
+    if (!mainFileUrl) {
+      return errorResponse(res, "Main file URL is required", 400);
     }
-    if (!req.files?.previews || req.files.previews.length === 0) {
-      return errorResponse(res, "At least one preview image is required", 400);
+    if (
+      !previewImageUrls ||
+      !Array.isArray(previewImageUrls) ||
+      previewImageUrls.length === 0
+    ) {
+      return errorResponse(
+        res,
+        "At least one preview image URL is required",
+        400
+      );
     }
 
     // price/currency logic for non-free resources
@@ -75,93 +78,15 @@ exports.createResource = async (req, res) => {
         );
       }
     }
+    const saveAsDraftFlag = saveAsDraft === true || saveAsDraft === "true";
 
     let resourceStatus = "pending"; // default publish → pending
-    if (saveAsDraft) {
+    if (saveAsDraftFlag == true) {
       resourceStatus = "draft";
     }
-    console.log("resourceStatus is", resourceStatus);
-    // Generate a temporary resource ID for file organization
-    const tempResourceId = new mongoose.Types.ObjectId();
 
-    // ---- upload banner and create ResourceFile doc (coverPhoto) ----
-    const bannerFile = req.files.banner[0];
-    const bannerResult = await uploadImage(
-      `data:${bannerFile.mimetype};base64,${bannerFile.buffer.toString(
-        "base64"
-      )}`,
-      `educate-hub/resources/${tempResourceId}/banner`
-    );
-
-    if (!bannerResult || !bannerResult.success) {
-      throw new Error("Banner upload failed");
-    }
-    uploadedPublicIds.push(bannerResult.public_id);
-
-    const bannerDoc = await resourceFile.create({
-      resourceId: tempResourceId,
-      fileType: "cover",
-      url: bannerResult.url,
-      publicId: bannerResult.public_id,
-      format: bannerResult.format,
-      size: bannerResult.bytes,
-      uploadedBy: userId,
-    });
-    createdFileDocs.push(bannerDoc);
-
-    // ---- upload previews and create ResourceFile docs ----
-    const previewDocs = [];
-    for (const f of req.files.previews) {
-      const r = await uploadImage(
-        `data:${f.mimetype};base64,${f.buffer.toString("base64")}`,
-        `educate-hub/resources/${tempResourceId}/previews`
-      );
-      if (!r || !r.success) {
-        throw new Error("Preview upload failed");
-      }
-      uploadedPublicIds.push(r.public_id);
-
-      const pf = await resourceFile.create({
-        resourceId: tempResourceId,
-        fileType: "preview",
-        url: r.url,
-        publicId: r.public_id,
-        format: r.format,
-        size: r.bytes,
-        uploadedBy: userId,
-      });
-      previewDocs.push(pf);
-      createdFileDocs.push(pf);
-    }
-
-    // ---- upload main files and create ResourceFile docs ----
-    const fileDocs = [];
-    for (const f of req.files.files) {
-      const r = await uploadImage(
-        `data:${f.mimetype};base64,${f.buffer.toString("base64")}`,
-        `educate-hub/resources/${tempResourceId}/files`
-      );
-      if (!r || !r.success) {
-        throw new Error("resource file upload failed");
-      }
-      uploadedPublicIds.push(r.public_id);
-
-      const fd = await resourceFile.create({
-        resourceId: tempResourceId,
-        fileType: "main",
-        url: r.url,
-        publicId: r.public_id,
-        format: r.format,
-        size: r.bytes,
-        uploadedBy: userId,
-      });
-      fileDocs.push(fd);
-      createdFileDocs.push(fd);
-    }
-
-    // ---- create resource with all file references ----
-    createdResource = await resource.create({
-      _id: tempResourceId,
+    // ---- create resource with direct URLs ----
+    const createdResource = await resource.create({
       title: title.trim(),
       description: description.trim(),
       type: resourceType,
@@ -175,23 +100,14 @@ exports.createResource = async (req, res) => {
       curriculum,
       curriculumType,
       subject,
-      coverPhoto: bannerDoc._id,
-      previewImages: previewDocs.map((d) => d._id),
-      mainFile: fileDocs[0]._id, // mainFile is single id per schema
+      coverPhoto: coverPhotoUrl,
+      previewImages: previewImageUrls,
+      mainFile: mainFileUrl,
     });
 
-    // Update the resourceFile documents with the actual resource ID
-    await resourceFile.updateMany(
-      { resourceId: tempResourceId },
-      { resourceId: createdResource._id }
-    );
-
-    // populate file refs for response
+    // populate user info for response
     const populatedResource = await resource
       .findById(createdResource._id)
-      .populate("coverPhoto")
-      .populate("previewImages")
-      .populate("mainFile")
       .populate("createdBy.userId", "firstName lastName email");
 
     return successResponse(
@@ -200,30 +116,6 @@ exports.createResource = async (req, res) => {
       "resource created successfully"
     );
   } catch (err) {
-    // cleanup uploaded cloudinary files & DB file docs & resource (best-effort)
-    try {
-      // delete cloudinary images
-      if (Array.isArray(uploadedPublicIds) && uploadedPublicIds.length) {
-        await Promise.all(
-          uploadedPublicIds.map((pid) => deleteImage(pid).catch(() => null))
-        );
-      }
-      // delete created resourceFile docs
-      if (Array.isArray(createdFileDocs) && createdFileDocs.length) {
-        await Promise.all(
-          createdFileDocs.map((d) =>
-            resourceFile.findByIdAndDelete(d._id).catch(() => null)
-          )
-        );
-      }
-      // delete resource if created
-      if (createdResource) {
-        await resource.findByIdAndDelete(createdResource._id).catch(() => null);
-      }
-    } catch (cleanupErr) {
-      console.error("Cleanup failed after createResource error:", cleanupErr);
-    }
-
     console.error("createResource error:", err);
     return errorResponse(res, "Failed to create resource", 500, err);
   }
@@ -258,9 +150,10 @@ exports.updateResource = async (req, res) => {
       curriculum,
       curriculumType,
       subject,
+      coverPhotoUrl,
+      previewImageUrls,
+      mainFileUrl,
     } = req.body;
-    
-    console.log("Request body values:", { isFree, price, currency });
 
     // Apply updates only if provided
     if (title) resourceDoc.title = title;
@@ -273,103 +166,27 @@ exports.updateResource = async (req, res) => {
     if (subject) resourceDoc.subject = subject;
 
     // Convert string boolean to actual boolean
-    const isFreeBoolean = String(isFree).toLowerCase() === 'true';
-    console.log("isFree:", isFree, "isFreeBoolean:", isFreeBoolean, "currency:", currency, "price:", price);
-    
+    const isFreeBoolean = String(isFree).toLowerCase() === "true";
     resourceDoc.isFree = isFreeBoolean;
     resourceDoc.price = isFreeBoolean ? 0 : price || resourceDoc.price;
-    
+
     if (isFreeBoolean) {
       resourceDoc.currency = null;
     } else {
       resourceDoc.currency = currency || resourceDoc.currency;
     }
-    
-    console.log("Final currency:", resourceDoc.currency);
 
-    // Banner update (replace existing)
-    if (req.files?.banner?.length > 0) {
-      if (resourceDoc.coverPhoto) {
-        const oldBanner = await resourceFile.findById(resourceDoc.coverPhoto);
-        if (oldBanner) {
-          await deleteImage(oldBanner.publicId);
-          await oldBanner.deleteOne();
-        }
-      }
-
-      const bannerFile = req.files.banner[0];
-      const bannerUpload = await uploadImage(
-        `data:${bannerFile.mimetype};base64,${bannerFile.buffer.toString(
-          "base64"
-        )}`,
-        `educate-hub/resources/${userId}/banner`
-      );
-
-      if (!bannerUpload.success) {
-        return errorResponse(res, "Failed to upload banner image", 500);
-      }
-
-      const bannerDoc = await resourceFile.create({
-        url: bannerUpload.url,
-        publicId: bannerUpload.public_id,
-        format: bannerUpload.format,
-        size: bannerUpload.bytes,
-        uploadedBy: userId,
-      });
-
-      resourceDoc.coverPhoto = bannerDoc._id;
+    // Update file URLs if provided
+    if (coverPhotoUrl) {
+      resourceDoc.coverPhoto = coverPhotoUrl;
     }
 
-    // Preview Images (append new ones, keep old unless explicitly deleted later)
-    if (req.files?.previews?.length > 0) {
-      const newPreviewDocs = await Promise.all(
-        req.files.previews.map(async (file) => {
-          const result = await uploadImage(
-            `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
-            `educate-hub/resources/${userId}/previews`
-          );
-          return result.success
-            ? await resourceFile.create({
-                url: result.url,
-                publicId: result.public_id,
-                format: result.format,
-                size: result.bytes,
-                uploadedBy: userId,
-              })
-            : null;
-        })
-      );
-
-      const validPreviews = newPreviewDocs.filter(Boolean);
-      if (validPreviews.length > 0) {
-        resourceDoc.previewImages.push(...validPreviews.map((f) => f._id));
-      }
+    if (previewImageUrls && Array.isArray(previewImageUrls)) {
+      resourceDoc.previewImages = previewImageUrls;
     }
 
-    // Main Files (append new ones)
-    if (req.files?.files?.length > 0) {
-      const newFileDocs = await Promise.all(
-        req.files.files.map(async (file) => {
-          const result = await uploadImage(
-            `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
-            `educate-hub/resources/${userId}/files`
-          );
-          return result.success
-            ? await resourceFile.create({
-                url: result.url,
-                publicId: result.public_id,
-                format: result.format,
-                size: result.bytes,
-                uploadedBy: userId,
-              })
-            : null;
-        })
-      );
-
-      const validFiles = newFileDocs.filter(Boolean);
-      if (validFiles.length > 0) {
-        resourceDoc.mainFile = validFiles[0]._id; // only one main file allowed
-      }
+    if (mainFileUrl) {
+      resourceDoc.mainFile = mainFileUrl;
     }
 
     // Status handling
@@ -392,7 +209,11 @@ exports.updateResource = async (req, res) => {
 
     await resourceDoc.save();
 
-    return successResponse(res, { resource: resourceDoc }, "resource updated successfully");
+    return successResponse(
+      res,
+      { resource: resourceDoc },
+      "resource updated successfully"
+    );
   } catch (err) {
     console.error("updateResource error:", err);
     return errorResponse(res, "Failed to update resource", 500);
@@ -405,7 +226,6 @@ exports.updateResourceStatus = async (req, res) => {
     const { status } = req.body;
     const userId = req.user.userId;
     const userRole = req.user.role;
-
     // validate input
     if (
       !status ||
@@ -438,8 +258,8 @@ exports.updateResourceStatus = async (req, res) => {
         return errorResponse(res, "Only draft resources can be submitted", 400);
       }
 
-      resource.status = "pending";
-      resource.approvedBy = null; // reset approval
+      resourceDoc.status = "pending";
+      resourceDoc.approvedBy = null; // reset approval
     } else {
       // Admin rules
       if (!["approved", "rejected", "pending"].includes(status)) {
@@ -450,8 +270,8 @@ exports.updateResourceStatus = async (req, res) => {
         );
       }
 
-      resource.status = status;
-      resource.approvedBy = status === "approved" ? userId : null;
+      resourceDoc.status = status;
+      resourceDoc.approvedBy = status === "approved" ? userId : null;
     }
 
     await resourceDoc.save();
@@ -466,7 +286,7 @@ exports.updateResourceStatus = async (req, res) => {
     return successResponse(
       res,
       {
-        resource: resource,
+        resource: resourceDoc,
       },
       "Resource status updated successfully"
     );
@@ -482,7 +302,7 @@ exports.getMyResources = async (req, res) => {
     const { search, status, page = 1, limit = 10 } = req.query;
 
     // base query for user's resources
-    let query = { "createdBy.userId": userId };
+    let query = { "createdBy.userId": userId, isDeleted: false };
 
     if (status && status !== "all") {
       query.status = status;
@@ -495,9 +315,6 @@ exports.getMyResources = async (req, res) => {
     // --- Resources ---
     const resources = await resource
       .find(query)
-      .populate("coverPhoto")
-      .populate("previewImages")
-      .populate("mainFile")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -505,6 +322,7 @@ exports.getMyResources = async (req, res) => {
 
     const totalResources = await resource.countDocuments({
       "createdBy.userId": userId,
+      isDeleted: false,
     });
 
     // --- Sales + Earnings ---
@@ -684,14 +502,13 @@ exports.getAllResourcesAdmin = async (req, res) => {
         path: "createdBy.userId",
         select: "firstName lastName email role",
       })
-      .populate("coverPhoto")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
     const formattedResources = resources.map((r) => ({
       id: r._id,
-      thumbnail: r.coverPhoto?.url || null,
+      thumbnail: r.coverPhoto || null,
       title: r.title,
       author: r.createdBy?.userId
         ? `${r.createdBy.userId.firstName} ${r.createdBy.userId.lastName}`
@@ -743,14 +560,13 @@ exports.getAllResourcesMainPage = async (req, res) => {
         path: "createdBy.userId",
         select: "firstName lastName email role",
       })
-      .populate("coverPhoto")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
     const formattedResources = resources.map((r) => ({
       id: r._id,
-      thumbnail: r.coverPhoto?.url || null,
+      thumbnail: r.coverPhoto || null,
       title: r.title,
       author: r.createdBy?.userId
         ? `${r.createdBy.userId.firstName} ${r.createdBy.userId.lastName}`
@@ -790,44 +606,93 @@ exports.getResourceById = async (req, res) => {
       .populate({
         path: "createdBy.userId",
         select: "firstName lastName email role",
-      })
-      .populate("coverPhoto")
-      .populate("files"); // assuming files are in a media collection
+      });
 
     if (!resourceDoc) {
       return errorResponse(res, "Resource not found", 404);
     }
 
-    // For public API, don’t expose drafts/pending
+    // For public API (unauthenticated users), don't expose drafts/pending
     if (!req.user && resourceDoc.status !== "approved") {
       return errorResponse(res, "Resource not available", 403);
     }
+
     const formattedResource = {
       id: resourceDoc._id,
       title: resourceDoc.title,
       description: resourceDoc.description,
       subject: resourceDoc.subject,
-      age: resourceDoc.age,
+      ageRange: resourceDoc.ageRange,
       curriculum: resourceDoc.curriculum,
+      curriculumType: resourceDoc.curriculumType,
       price: resourceDoc.isFree
         ? "Free"
         : `${resourceDoc.currency} ${resourceDoc.price}`,
       status: resourceDoc.status,
-      thumbnail: resourceDoc.coverPhoto?.url || null,
+      thumbnail: resourceDoc.coverPhoto || null,
+      previews: resourceDoc.previewImages || [],
+      file: resourceDoc.mainFile || null,
       author: resourceDoc.createdBy?.userId
         ? `${resourceDoc.createdBy.userId.firstName} ${resourceDoc.createdBy.userId.lastName}`
         : "Unknown",
-      files: resourceDoc.files || [],
       createdAt: resourceDoc.createdAt,
     };
 
     return successResponse(
       res,
       formattedResource,
-      "Resource fetched succesfully!"
+      "Resource fetched successfully!"
     );
   } catch (err) {
     console.error("getResourceById error:", err);
+    return errorResponse(res, "Failed to fetch resource", 500);
+  }
+};
+
+// Admin: Get Resource by ID
+exports.getResourceByIdAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const resourceDoc = await resource
+      .findOne({ _id: id, isDeleted: false }) // exclude only deleted
+      .populate({
+        path: "createdBy.userId",
+        select: "firstName lastName email role",
+      });
+
+    if (!resourceDoc) {
+      return errorResponse(res, "Resource not found", 404);
+    }
+    // commit
+    const formattedResource = {
+      id: resourceDoc._id,
+      title: resourceDoc.title,
+      description: resourceDoc.description,
+      subject: resourceDoc.subject,
+      ageRange: resourceDoc.ageRange,
+      curriculum: resourceDoc.curriculum,
+      curriculumType: resourceDoc.curriculumType,
+      price: resourceDoc.isFree
+        ? "Free"
+        : `${resourceDoc.currency} ${resourceDoc.price}`,
+      status: resourceDoc.status,
+      thumbnail: resourceDoc.coverPhoto || null,
+      previews: resourceDoc.previewImages || [],
+      file: resourceDoc.mainFile || null,
+      author: resourceDoc.createdBy?.userId
+        ? `${resourceDoc.createdBy.userId.firstName} ${resourceDoc.createdBy.userId.lastName}`
+        : "Unknown",
+      createdAt: resourceDoc.createdAt,
+    };
+
+    return successResponse(
+      res,
+      formattedResource,
+      "Admin: Resource fetched successfully!"
+    );
+  } catch (err) {
+    console.error("getResourceByIdAdmin error:", err);
     return errorResponse(res, "Failed to fetch resource", 500);
   }
 };
