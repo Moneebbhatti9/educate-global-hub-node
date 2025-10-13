@@ -18,8 +18,25 @@ const replySchema = new mongoose.Schema(
       ref: "Reply",
       default: null,
     },
-
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // LinkedIn-style enhancements
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: {
+      type: Date,
+    },
+    mentions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    depth: {
+      type: Number,
+      default: 0,
+    }, // For nested replies (max 2-3 levels)
   },
   { timestamps: true }
 );

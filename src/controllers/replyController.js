@@ -2,29 +2,43 @@ const { default: mongoose } = require("mongoose");
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
+const { createNotification } = require("./forumNotificationController");
 
 exports.postReply = async (req, res) => {
   try {
-    const { discussionId, content, parentReply } = req.body;
+    const { discussionId, content, parentReply, mentions } = req.body;
 
     if (!discussionId || !content?.trim()) {
       return errorResponse(res, "Discussion ID and content are required", 400);
     }
 
     // Check if discussion exists
-    const discussion = await Discussion.findById(discussionId);
+    const discussion = await Discussion.findById(discussionId).populate(
+      "createdBy",
+      "_id"
+    );
     if (!discussion) {
       return errorResponse(res, "Discussion not found", 404);
     }
     if (discussion.isLocked)
       return errorResponse(res, "Discussion is locked", 403);
 
+    let depth = 0;
+    let parentReplyData = null;
+
     // If parentReply provided, ensure it exists and belongs to same discussion
     if (parentReply) {
-      const parent = await Reply.findById(parentReply);
-      if (!parent || String(parent.discussion) !== String(discussionId)) {
+      parentReplyData = await Reply.findById(parentReply).populate(
+        "createdBy",
+        "_id"
+      );
+      if (
+        !parentReplyData ||
+        String(parentReplyData.discussion) !== String(discussionId)
+      ) {
         return errorResponse(res, "Invalid parent reply", 400);
       }
+      depth = (parentReplyData.depth || 0) + 1;
     }
 
     const reply = await Reply.create({
@@ -32,11 +46,72 @@ exports.postReply = async (req, res) => {
       content: content.trim(),
       parentReply: parentReply || null,
       createdBy: req.user.userId,
+      depth,
+      mentions: mentions || [],
     });
 
-    // Broadcast via socket
+    // Update discussion commentsCount and engagement score
+    await Discussion.findByIdAndUpdate(discussionId, {
+      $inc: { commentsCount: 1 },
+      $set: {
+        lastActivityAt: new Date(),
+        engagementScore:
+          discussion.likes.length * 2 +
+          (discussion.commentsCount + 1) * 3 +
+          discussion.views * 0.1,
+      },
+    });
+
+    // Populate reply data for response
+    await reply.populate("createdBy", "firstName lastName avatarUrl role");
+
+    // Create notification for discussion owner (LinkedIn-style)
+    if (!parentReply) {
+      await createNotification({
+        recipient: discussion.createdBy._id,
+        sender: req.user.userId,
+        type: "comment",
+        discussion: discussionId,
+        comment: reply._id,
+        message: `commented on your post "${discussion.title}"`,
+      });
+    } else {
+      // Create notification for parent reply owner
+      await createNotification({
+        recipient: parentReplyData.createdBy._id,
+        sender: req.user.userId,
+        type: "reply",
+        discussion: discussionId,
+        comment: reply._id,
+        message: `replied to your comment`,
+      });
+    }
+
+    // Create notifications for mentioned users
+    if (mentions && mentions.length > 0) {
+      for (const mentionedUserId of mentions) {
+        await createNotification({
+          recipient: mentionedUserId,
+          sender: req.user.userId,
+          type: "mention",
+          discussion: discussionId,
+          comment: reply._id,
+          message: `mentioned you in a comment`,
+        });
+      }
+    }
+
+    // Broadcast via socket to discussion room
     const io = req.app.get("io");
-    if (io) io.emit("newReply", reply);
+    if (io) {
+      io.to(`discussion:${discussionId}`).emit("comment:new", reply);
+
+      // Notify discussion owner in real-time
+      io.to(`user:${discussion.createdBy._id}`).emit("notification:new", {
+        type: parentReply ? "reply" : "comment",
+        message: `Someone ${parentReply ? "replied to" : "commented on"} your post`,
+      });
+    }
 
     return successResponse(res, reply, "Reply posted successfully", 201);
   } catch (err) {
@@ -158,7 +233,7 @@ exports.toggleLikeReply = async (req, res) => {
 
     const reply = await Reply.findById(id).populate(
       "createdBy",
-      "firstName lastName avatarUrl"
+      "firstName lastName avatarUrl _id"
     );
     if (!reply) return errorResponse(res, "Reply not found", 404);
 
@@ -167,13 +242,36 @@ exports.toggleLikeReply = async (req, res) => {
       reply.likes.pull(userId);
     } else {
       reply.likes.push(userId);
+
+      // Create notification for comment owner (LinkedIn-style)
+      await createNotification({
+        recipient: reply.createdBy._id,
+        sender: userId,
+        type: "like",
+        discussion: reply.discussion,
+        comment: reply._id,
+        message: `liked your comment`,
+      });
     }
 
     await reply.save();
 
-    // Broadcast like event
+    // Broadcast like event to discussion room
     const io = req.app.get("io");
-    if (io) io.emit("likeReply", { replyId: id, userId, liked: !alreadyLiked });
+    if (io) {
+      io.to(`discussion:${reply.discussion}`).emit("comment:updated", {
+        commentId: id,
+        likes: reply.likes.length,
+      });
+
+      // Real-time notification
+      if (!alreadyLiked) {
+        io.to(`user:${reply.createdBy._id}`).emit("notification:new", {
+          type: "like",
+          message: "Someone liked your comment",
+        });
+      }
+    }
 
     return successResponse(
       res,
