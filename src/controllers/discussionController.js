@@ -2,10 +2,12 @@ const { default: mongoose } = require("mongoose");
 const Discussion = require("../models/Discussion");
 const Reply = require("../models/Reply");
 const { successResponse, errorResponse } = require("../utils/response");
+const { createNotification } = require("./forumNotificationController");
+const { cloudinary } = require("../config/cloudinary");
 
 exports.createDiscussion = async (req, res) => {
   try {
-    const { title, content, category, tags } = req.body;
+    const { title, content, category, tags, images } = req.body;
 
     if (!title || !category) {
       return errorResponse(res, "Title and category are required", 400);
@@ -21,11 +23,38 @@ exports.createDiscussion = async (req, res) => {
       return errorResponse(res, "Invalid category", 400);
     }
 
+    // Handle image uploads to Cloudinary
+    const uploadedImages = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      for (const imageData of images.slice(0, 4)) { // Max 4 images
+        try {
+          const uploadResponse = await cloudinary.uploader.upload(imageData, {
+            folder: "forum_posts",
+            resource_type: "auto",
+            transformation: [
+              { width: 1200, height: 1200, crop: "limit" },
+              { quality: "auto:good" },
+              { fetch_format: "auto" }
+            ]
+          });
+
+          uploadedImages.push({
+            url: uploadResponse.secure_url,
+            publicId: uploadResponse.public_id,
+          });
+        } catch (uploadError) {
+          console.error("Image upload error:", uploadError);
+          // Continue with other images if one fails
+        }
+      }
+    }
+
     const discussion = await Discussion.create({
       title: title.trim(),
       content: content?.trim() || "",
       category,
       tags: Array.isArray(tags) ? tags : [],
+      images: uploadedImages,
       createdBy: req.user.userId,
     });
     await discussion.populate("createdBy", "firstName lastName avatarUrl");
@@ -55,9 +84,43 @@ exports.toggleLikeDiscussion = async (req, res) => {
       discussion.likes.pull(userId);
     } else {
       discussion.likes.push(userId);
+
+      // Create notification for post owner (LinkedIn-style)
+      await createNotification({
+        recipient: discussion.createdBy._id,
+        sender: userId,
+        type: "like",
+        discussion: discussion._id,
+        message: `liked your post "${discussion.title}"`,
+      });
+
+      // Emit real-time event via Socket.IO
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user:${discussion.createdBy._id}`).emit("notification:new", {
+          type: "like",
+          message: `Someone liked your post "${discussion.title}"`,
+        });
+      }
     }
 
+    // Update engagement score
+    discussion.engagementScore =
+      discussion.likes.length * 2 +
+      discussion.commentsCount * 3 +
+      discussion.views * 0.1;
+    discussion.lastActivityAt = new Date();
+
     await discussion.save();
+
+    // Broadcast updated like count to all users viewing this discussion
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`discussion:${id}`).emit("post:updated", {
+        discussionId: id,
+        likes: discussion.likes.length,
+      });
+    }
 
     return successResponse(
       res,
@@ -68,6 +131,7 @@ exports.toggleLikeDiscussion = async (req, res) => {
       "Like updated successfully"
     );
   } catch (err) {
+    console.error("toggleLikeDiscussion error:", err);
     return errorResponse(res, "Failed to like discussion", 500);
   }
 };
@@ -275,26 +339,32 @@ exports.getDiscussionFeed = async (req, res) => {
           from: "users",
           localField: "createdBy",
           foreignField: "_id",
-          as: "user",
+          as: "createdByUser",
         },
       },
-      { $unwind: "$user" },
+      { $unwind: "$createdByUser" },
       {
         $project: {
+          _id: 1,
           title: 1,
           content: 1,
           category: 1,
           tags: 1,
-          createdBy: 1,
+          images: { $ifNull: ["$images", []] },
           views: 1,
+          likes: 1,
           createdAt: 1,
           updatedAt: 1,
           replyCount: 1,
           lastReplyAt: 1,
           trendingScore: 1,
-          "user.firstName": 1,
-          "user.lastName": 1,
-          "user.avatarUrl": 1,
+          createdBy: {
+            _id: "$createdByUser._id",
+            firstName: "$createdByUser.firstName",
+            lastName: "$createdByUser.lastName",
+            avatarUrl: "$createdByUser.avatarUrl",
+            role: "$createdByUser.role",
+          },
         },
       },
     ];
