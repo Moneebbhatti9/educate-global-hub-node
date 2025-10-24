@@ -96,8 +96,16 @@ const validationSchemas = {
     }),
   }),
 
-  // Password reset
+  // Password reset request (just email)
   passwordReset: Joi.object({
+    email: Joi.string().email().required().messages({
+      "string.email": "Please provide a valid email address",
+      "any.required": "Email is required",
+    }),
+  }),
+
+  // Password reset confirmation (email, otp, and new password)
+  passwordResetConfirm: Joi.object({
     email: Joi.string().email().required().messages({
       "string.email": "Please provide a valid email address",
       "any.required": "Email is required",
@@ -118,13 +126,6 @@ const validationSchemas = {
         "string.pattern.base":
           "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
         "any.required": "New password is required",
-      }),
-    confirmPassword: Joi.string()
-      .valid(Joi.ref("newPassword"))
-      .required()
-      .messages({
-        "any.only": "Passwords do not match",
-        "any.required": "Password confirmation is required",
       }),
   }),
 
