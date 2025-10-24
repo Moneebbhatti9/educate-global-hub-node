@@ -30,6 +30,10 @@ const replyRoutes = require("./routes/reply");
 const adminForumRoutes = require("./routes/adminForum");
 const resourceRoutes = require("./routes/resource");
 const forumNotificationRoutes = require("./routes/forumNotifications");
+const salesRoutes = require("./routes/sales");
+const withdrawalRoutes = require("./routes/withdrawals");
+const webhookRoutes = require("./routes/webhooks");
+const reviewRoutes = require("./routes/reviews");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -118,6 +122,15 @@ if (process.env.NODE_ENV === "development") {
 // Compression middleware
 app.use(compression());
 
+// Webhook routes (MUST come before body parsing middleware)
+// Webhooks need raw body for signature verification
+const apiVersion = process.env.API_VERSION || "v1";
+app.use(
+  `/api/${apiVersion}/webhooks`,
+  express.raw({ type: "application/json" }),
+  webhookRoutes
+);
+
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -140,7 +153,6 @@ app.get("/health", (req, res) => {
 });
 
 // API routes
-const apiVersion = process.env.API_VERSION || "v1";
 app.use(`/api/${apiVersion}/auth`, authRoutes);
 app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
@@ -157,6 +169,9 @@ app.use(`/api/${apiVersion}/reply`, replyRoutes);
 app.use(`/api/${apiVersion}/adminForum`, adminForumRoutes);
 app.use(`/api/${apiVersion}/resources`, resourceRoutes);
 app.use(`/api/${apiVersion}/forum-notifications`, forumNotificationRoutes);
+app.use(`/api/${apiVersion}/sales`, salesRoutes);
+app.use(`/api/${apiVersion}/withdrawals`, withdrawalRoutes);
+app.use(`/api/${apiVersion}/reviews`, reviewRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
