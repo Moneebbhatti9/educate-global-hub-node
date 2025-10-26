@@ -360,12 +360,19 @@ async function getPurchaseBySession(req, res, next) {
       stripeSessionId: sessionId,
     }).sort({ saleDate: -1 });
 
+    // If purchase or sale not found yet, return null (webhook still processing)
+    if (!purchase || !sale) {
+      return successResponse(res, {
+        purchase: null,
+      }, "Purchase is still being processed");
+    }
+
     return successResponse(res, {
       purchase: {
-        _id: purchase?._id,
-        purchaseDate: purchase?.purchaseDate || new Date(),
-        pricePaid: purchase?.pricePaid || resource.price,
-        saleId: sale?._id,
+        _id: purchase._id,
+        purchaseDate: purchase.purchaseDate,
+        pricePaid: purchase.pricePaid,
+        saleId: sale._id,
         resource: {
           _id: resource._id,
           title: resource.title,

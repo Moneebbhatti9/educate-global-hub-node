@@ -88,7 +88,6 @@ const saleSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
-      index: true,
     },
     buyerEmail: {
       type: String,
@@ -119,7 +118,6 @@ const saleSchema = new mongoose.Schema(
 saleSchema.index({ seller: 1, saleDate: -1 });
 saleSchema.index({ seller: 1, status: 1 });
 saleSchema.index({ resource: 1, saleDate: -1 });
-saleSchema.index({ stripeChargeId: 1 }, { sparse: true });
 
 // Virtual for resource details
 saleSchema.virtual("resourceDetails", {
