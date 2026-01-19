@@ -88,7 +88,7 @@ balanceLedgerSchema.statics.getBalanceBreakdown = async function (
   const result = await this.aggregate([
     {
       $match: {
-        seller: mongoose.Types.ObjectId(sellerId),
+        seller: new mongoose.Types.ObjectId(sellerId),
         currency: currency,
       },
     },

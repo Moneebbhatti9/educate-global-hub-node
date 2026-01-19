@@ -155,7 +155,7 @@ saleSchema.statics.calculateSellerSales = async function (sellerId, months = 12)
   const result = await this.aggregate([
     {
       $match: {
-        seller: mongoose.Types.ObjectId(sellerId),
+        seller: new mongoose.Types.ObjectId(sellerId),
         status: { $in: ["completed"] },
         saleDate: { $gte: startDate },
       },
@@ -177,7 +177,7 @@ saleSchema.statics.getSellerEarnings = async function (sellerId, currency = "GBP
   const result = await this.aggregate([
     {
       $match: {
-        seller: mongoose.Types.ObjectId(sellerId),
+        seller: new mongoose.Types.ObjectId(sellerId),
         currency: currency,
         status: { $in: ["completed"] },
       },
