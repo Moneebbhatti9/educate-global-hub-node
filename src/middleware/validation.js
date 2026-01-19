@@ -96,8 +96,16 @@ const validationSchemas = {
     }),
   }),
 
-  // Password reset
+  // Password reset request (just email)
   passwordReset: Joi.object({
+    email: Joi.string().email().required().messages({
+      "string.email": "Please provide a valid email address",
+      "any.required": "Email is required",
+    }),
+  }),
+
+  // Password reset confirmation (email, otp, and new password)
+  passwordResetConfirm: Joi.object({
     email: Joi.string().email().required().messages({
       "string.email": "Please provide a valid email address",
       "any.required": "Email is required",
@@ -117,6 +125,25 @@ const validationSchemas = {
         "string.min": "Password must be at least 8 characters long",
         "string.pattern.base":
           "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+        "any.required": "New password is required",
+      }),
+  }),
+
+  // Change password (for authenticated users)
+  changePassword: Joi.object({
+    currentPassword: Joi.string().required().messages({
+      "any.required": "Current password is required",
+    }),
+    newPassword: Joi.string()
+      .min(8)
+      .pattern(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/
+      )
+      .required()
+      .messages({
+        "string.min": "New password must be at least 8 characters long",
+        "string.pattern.base":
+          "New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
         "any.required": "New password is required",
       }),
     confirmPassword: Joi.string()
@@ -201,10 +228,15 @@ const validationSchemas = {
 
   // Teacher profile validation
   teacherProfile: Joi.object({
-    fullName: Joi.string().min(2).max(100).required().messages({
-      "string.min": "Full name must be at least 2 characters long",
-      "string.max": "Full name cannot exceed 100 characters",
-      "any.required": "Full name is required",
+    firstName: Joi.string().min(2).max(100).required().messages({
+      "string.min": "First name must be at least 2 characters long",
+      "string.max": "First name cannot exceed 100 characters",
+      "any.required": "First name is required",
+    }),
+    lastName: Joi.string().min(2).max(100).required().messages({
+      "string.min": "Last name must be at least 2 characters long",
+      "string.max": "Last name cannot exceed 100 characters",
+      "any.required": "Last name is required",
     }),
     phoneNumber: Joi.string()
       .pattern(/^\+[1-9]\d{1,14}$/)
@@ -229,10 +261,9 @@ const validationSchemas = {
       "string.max": "Province/State cannot exceed 50 characters",
       "any.required": "Province/State is required",
     }),
-    zipCode: Joi.string().min(2).max(20).required().messages({
+    zipCode: Joi.string().min(2).max(20).optional().allow("").messages({
       "string.min": "Zip code must be at least 2 characters long",
       "string.max": "Zip code cannot exceed 20 characters",
-      "any.required": "Zip code is required",
     }),
     address: Joi.string().min(5).max(200).required().messages({
       "string.min": "Address must be at least 5 characters long",
@@ -304,10 +335,9 @@ const validationSchemas = {
       "string.max": "Province/State cannot exceed 50 characters",
       "any.required": "Province/State is required",
     }),
-    zipCode: Joi.string().min(2).max(20).required().messages({
+    zipCode: Joi.string().min(2).max(20).optional().allow("").messages({
       "string.min": "Zip code must be at least 2 characters long",
       "string.max": "Zip code cannot exceed 20 characters",
-      "any.required": "Zip code is required",
     }),
     address: Joi.string().min(5).max(200).required().messages({
       "string.min": "Address must be at least 5 characters long",
@@ -384,7 +414,7 @@ const validationSchemas = {
         "array.min": "At least one age group must be selected",
         "any.required": "Age group is required",
       }),
-    schoolWebsite: Joi.string().uri().optional().messages({
+    schoolWebsite: Joi.string().uri().allow("", null).optional().messages({
       "string.uri": "Please provide a valid website URL",
     }),
     aboutSchool: Joi.string().min(100).max(2000).required().messages({

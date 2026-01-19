@@ -15,8 +15,6 @@ const jobApplicationSchema = new mongoose.Schema(
     coverLetter: {
       type: String,
       required: true,
-      minlength: 200,
-      maxlength: 2000,
     },
     expectedSalary: {
       type: Number,
@@ -82,7 +80,7 @@ const jobApplicationSchema = new mongoose.Schema(
       default: [],
       validate: {
         validator: function (v) {
-          return v.every(url => /^https?:\/\/.+/.test(url));
+          return v.every((url) => /^https?:\/\/.+/.test(url));
         },
         message: "All document URLs must be valid URLs",
       },
@@ -151,7 +149,11 @@ jobApplicationSchema.virtual("isOverdue").get(function () {
 // Pre-save middleware to handle status changes
 jobApplicationSchema.pre("save", function (next) {
   // Set reviewedAt when status changes from pending
-  if (this.isModified("status") && this.status !== "pending" && !this.reviewedAt) {
+  if (
+    this.isModified("status") &&
+    this.status !== "pending" &&
+    !this.reviewedAt
+  ) {
     this.reviewedAt = new Date();
   }
 
@@ -165,22 +167,30 @@ jobApplicationSchema.pre("save", function (next) {
 });
 
 // Method to update status
-jobApplicationSchema.methods.updateStatus = async function (newStatus, notes = "", reviewedBy = null) {
+jobApplicationSchema.methods.updateStatus = async function (
+  newStatus,
+  notes = "",
+  reviewedBy = null
+) {
   this.status = newStatus;
   this.notes = notes;
   this.reviewedBy = reviewedBy;
   this.reviewedAt = new Date();
-  
+
   // Handle specific status changes
   if (newStatus === "interviewed" && !this.interviewDate) {
     this.interviewDate = new Date();
   }
-  
+
   return this.save();
 };
 
 // Method to reject application
-jobApplicationSchema.methods.reject = async function (reason, notes = "", reviewedBy = null) {
+jobApplicationSchema.methods.reject = async function (
+  reason,
+  notes = "",
+  reviewedBy = null
+) {
   this.status = "rejected";
   this.rejectionReason = reason;
   this.notes = notes;
@@ -199,7 +209,11 @@ jobApplicationSchema.methods.withdraw = async function (reason = "") {
 };
 
 // Method to schedule interview
-jobApplicationSchema.methods.scheduleInterview = async function (interviewDate, notes = "", reviewedBy = null) {
+jobApplicationSchema.methods.scheduleInterview = async function (
+  interviewDate,
+  notes = "",
+  reviewedBy = null
+) {
   this.status = "interviewed";
   this.interviewDate = interviewDate;
   this.interviewNotes = notes;
@@ -209,7 +223,10 @@ jobApplicationSchema.methods.scheduleInterview = async function (interviewDate, 
 };
 
 // Method to accept application
-jobApplicationSchema.methods.accept = async function (notes = "", reviewedBy = null) {
+jobApplicationSchema.methods.accept = async function (
+  notes = "",
+  reviewedBy = null
+) {
   this.status = "accepted";
   this.notes = notes;
   this.reviewedBy = reviewedBy;
@@ -220,18 +237,18 @@ jobApplicationSchema.methods.accept = async function (notes = "", reviewedBy = n
 // Method to sanitize application data for public viewing
 jobApplicationSchema.methods.toPublicObject = function () {
   const application = this.toObject();
-  
+
   // Remove sensitive fields
   delete application.notes;
   delete application.reviewedBy;
   delete application.rejectionReason;
   delete application.interviewNotes;
   delete application.withdrawnReason;
-  
+
   // Add computed fields
   application.daysSinceApplied = this.daysSinceApplied;
   application.isOverdue = this.isOverdue;
-  
+
   return application;
 };
 
@@ -247,12 +264,18 @@ jobApplicationSchema.statics.findByStatus = function (status) {
 
 // Static method to find applications for a specific job
 jobApplicationSchema.statics.findByJob = function (jobId) {
-  return this.find({ jobId }).populate("teacherId", "fullName email phoneNumber country city");
+  return this.find({ jobId }).populate(
+    "teacherId",
+    "firstName lastName email phoneNumber country city"
+  );
 };
 
 // Static method to find applications by a specific teacher
 jobApplicationSchema.statics.findByTeacher = function (teacherId) {
-  return this.find({ teacherId }).populate("jobId", "title schoolId status applicationDeadline");
+  return this.find({ teacherId }).populate(
+    "jobId",
+    "title schoolId status applicationDeadline"
+  );
 };
 
 module.exports = mongoose.model("JobApplication", jobApplicationSchema);

@@ -62,6 +62,19 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // GDPR-related fields
+    deletionRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    deletionReason: {
+      type: String,
+      default: null,
+    },
+    inactivityWarningAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -78,6 +91,22 @@ userSchema.index({ lastActive: 1 });
 // Virtual for full name
 userSchema.virtual("fullName").get(function () {
   return `${this.firstName} ${this.lastName}`;
+});
+
+// Virtual populate for teacher profile
+userSchema.virtual("teacherProfile", {
+  ref: "TeacherProfile",
+  localField: "_id",
+  foreignField: "userId",
+  justOne: true,
+});
+
+// Virtual populate for school profile
+userSchema.virtual("schoolProfile", {
+  ref: "SchoolProfile",
+  localField: "_id",
+  foreignField: "userId",
+  justOne: true,
 });
 
 // Method to compare password

@@ -271,6 +271,9 @@ const getAllJobs = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
+    // Get school ID from authenticated user if available
+    const schoolId = req.user?.schoolId || null;
+
     const result = await AdminJobManagementService.getAllJobs({
       page: parseInt(page),
       limit: parseInt(limit),
@@ -282,12 +285,27 @@ const getAllJobs = async (req, res) => {
       educationLevel,
       sortBy,
       sortOrder,
+      schoolId,
     });
 
-    return paginatedResponse(
+    // Set cache control headers to prevent caching
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+
+    return successResponse(
       res,
-      result.jobs,
-      result.pagination,
+      {
+        jobs: result.jobs,
+        pagination: {
+          page: result.pagination.page,
+          limit: result.pagination.limit,
+          total: result.pagination.total,
+          totalPages: result.pagination.totalPages,
+          hasNext: result.pagination.hasNextPage,
+          hasPrev: result.pagination.hasPrevPage,
+        },
+      },
       "Jobs retrieved successfully"
     );
   } catch (error) {
@@ -299,7 +317,10 @@ const getAllJobs = async (req, res) => {
 // Get job statistics
 const getJobStatistics = async (req, res) => {
   try {
-    const stats = await AdminJobManagementService.getJobStatistics();
+    // Get school ID from authenticated user if available
+    const schoolId = req.user?.schoolId || null;
+
+    const stats = await AdminJobManagementService.getJobStatistics(schoolId);
     return successResponse(res, stats, "Job statistics retrieved successfully");
   } catch (error) {
     console.error("Error getting job statistics:", error);

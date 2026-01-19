@@ -4,7 +4,7 @@ const SchoolProfile = require("../models/SchoolProfile");
 
 class AdminJobManagementService {
   // Get all jobs with pagination, search, and filters
-  async getAllJobs({
+  static async getAllJobs({
     page = 1,
     limit = 10,
     search,
@@ -15,12 +15,32 @@ class AdminJobManagementService {
     educationLevel,
     sortBy = "createdAt",
     sortOrder = "desc",
+    schoolId = null,
   }) {
     try {
+      console.log("getAllJobs called with params:", {
+        page,
+        limit,
+        search,
+        status,
+        jobType,
+        country,
+        city,
+        educationLevel,
+        sortBy,
+        sortOrder,
+        schoolId,
+      });
+
       const query = { deletedAt: { $exists: false } };
 
+      // Filter by school if provided
+      if (schoolId) {
+        query.schoolId = schoolId;
+      }
+
       // Search filter
-      if (search) {
+      if (search && search.trim()) {
         query.$text = { $search: search };
       }
 
@@ -47,6 +67,8 @@ class AdminJobManagementService {
         query.educationLevel = educationLevel;
       }
 
+      console.log("Final query:", JSON.stringify(query, null, 2));
+
       // Build sort object
       const sort = {};
       sort[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -54,16 +76,30 @@ class AdminJobManagementService {
       // Calculate pagination
       const skip = (page - 1) * limit;
 
+      console.log("Sort:", sort, "Skip:", skip, "Limit:", limit);
+
       // Execute query
-      const [jobs, total] = await Promise.all([
-        Job.find(query)
-          .populate("schoolId", "name organization country city")
-          .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        Job.countDocuments(query),
-      ]);
+      let jobs, total;
+      try {
+        [jobs, total] = await Promise.all([
+          Job.find(query)
+            .populate("schoolId", "name organization country city")
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+          Job.countDocuments(query),
+        ]);
+        console.log(
+          "Query executed successfully. Jobs found:",
+          jobs.length,
+          "Total:",
+          total
+        );
+      } catch (queryError) {
+        console.error("Database query error:", queryError);
+        throw new Error(`Database query failed: ${queryError.message}`);
+      }
 
       // Calculate pagination info
       const totalPages = Math.ceil(total / limit);
@@ -71,13 +107,24 @@ class AdminJobManagementService {
       const hasPrevPage = page > 1;
 
       // Transform jobs to include additional info
-      const transformedJobs = jobs.map((job) => ({
-        ...job,
-        salaryRange: this.formatSalaryRange(job),
-        daysPosted: this.calculateDaysPosted(job.publishedAt),
-        isExpired: this.isJobExpired(job.applicationDeadline),
-        statusDisplay: this.getStatusDisplay(job.status),
-      }));
+      let transformedJobs;
+      try {
+        transformedJobs = jobs.map((job) => ({
+          ...job,
+          salaryRange: AdminJobManagementService.formatSalaryRange(job),
+          daysPosted: AdminJobManagementService.calculateDaysPosted(
+            job.publishedAt
+          ),
+          isExpired: AdminJobManagementService.isJobExpired(
+            job.applicationDeadline
+          ),
+          statusDisplay: AdminJobManagementService.getStatusDisplay(job.status),
+        }));
+        console.log("Jobs transformed successfully");
+      } catch (transformError) {
+        console.error("Job transformation error:", transformError);
+        throw new Error(`Job transformation failed: ${transformError.message}`);
+      }
 
       return {
         jobs: transformedJobs,
@@ -97,27 +144,33 @@ class AdminJobManagementService {
   }
 
   // Get job statistics
-  async getJobStatistics() {
+  static async getJobStatistics(schoolId = null) {
     try {
+      // Build base query - filter by school if provided
+      const baseQuery = { deletedAt: { $exists: false } };
+      if (schoolId) {
+        baseQuery.schoolId = schoolId;
+      }
+
       const [totalJobs, activeJobs, pendingJobs, suspendedJobs, expiredJobs] =
         await Promise.all([
-          Job.countDocuments({ deletedAt: { $exists: false } }),
+          Job.countDocuments(baseQuery),
           Job.countDocuments({
+            ...baseQuery,
             status: "published",
-            deletedAt: { $exists: false },
           }),
           Job.countDocuments({
+            ...baseQuery,
             status: "draft",
-            deletedAt: { $exists: false },
           }),
           Job.countDocuments({
+            ...baseQuery,
             status: "closed",
-            deletedAt: { $exists: false },
           }),
           Job.countDocuments({
+            ...baseQuery,
             applicationDeadline: { $lte: new Date() },
             status: "published",
-            deletedAt: { $exists: false },
           }),
         ]);
 
@@ -135,7 +188,7 @@ class AdminJobManagementService {
   }
 
   // Get job by ID
-  async getJobById(jobId) {
+  static async getJobById(jobId) {
     try {
       const job = await Job.findOne({
         _id: jobId,
@@ -162,7 +215,7 @@ class AdminJobManagementService {
   }
 
   // Update job status
-  async updateJobStatus(jobId, status, reason) {
+  static async updateJobStatus(jobId, status, reason) {
     try {
       const validStatuses = ["draft", "published", "closed", "expired"];
 
@@ -212,7 +265,7 @@ class AdminJobManagementService {
   }
 
   // Delete job
-  async deleteJob(jobId, reason) {
+  static async deleteJob(jobId, reason) {
     try {
       const job = await Job.findOne({
         _id: jobId,
@@ -237,7 +290,7 @@ class AdminJobManagementService {
   }
 
   // Export jobs
-  async exportJobs({
+  static async exportJobs({
     status,
     jobType,
     country,
@@ -271,7 +324,7 @@ class AdminJobManagementService {
   }
 
   // Get job applications
-  async getJobApplications(
+  static async getJobApplications(
     jobId,
     { page = 1, limit = 10, status, sortBy = "createdAt", sortOrder = "desc" }
   ) {
@@ -291,20 +344,171 @@ class AdminJobManagementService {
         query.status = status;
       }
 
-      const sort = {};
-      sort[sortBy] = sortOrder === "desc" ? -1 : 1;
+      // Map appliedAt to createdAt since they represent the same thing
+      let actualSortBy = sortBy;
+      if (sortBy === "appliedAt") {
+        actualSortBy = "createdAt";
+      }
 
       const skip = (page - 1) * limit;
 
-      const [applications, total] = await Promise.all([
-        JobApplication.find(query)
-          .populate("applicantId", "firstName lastName email")
-          .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        JobApplication.countDocuments(query),
-      ]);
+      let applications, total;
+
+      // Handle teacherName sorting with aggregation pipeline
+      if (sortBy === "teacherName") {
+        const pipeline = [
+          { $match: query },
+          {
+            $lookup: {
+              from: "teacherprofiles",
+              localField: "teacherId",
+              foreignField: "_id",
+              as: "teacherProfile",
+            },
+          },
+          { $unwind: "$teacherProfile" },
+          {
+            $lookup: {
+              from: "users",
+              localField: "teacherProfile.userId",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          { $unwind: "$user" },
+          {
+            $addFields: {
+              teacherFullName: {
+                $concat: ["$user.firstName", " ", "$user.lastName"],
+              },
+            },
+          },
+          {
+            $sort: {
+              teacherFullName: sortOrder === "desc" ? -1 : 1,
+            },
+          },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $lookup: {
+              from: "teacherprofiles",
+              localField: "teacherId",
+              foreignField: "_id",
+              as: "teacherProfile",
+            },
+          },
+          { $unwind: "$teacherProfile" },
+          {
+            $lookup: {
+              from: "users",
+              localField: "teacherProfile.userId",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          { $unwind: "$user" },
+          {
+            $project: {
+              _id: 1,
+              jobId: 1,
+              teacherId: 1,
+              coverLetter: 1,
+              expectedSalary: 1,
+              availableFrom: 1,
+              reasonForApplying: 1,
+              additionalComments: 1,
+              screeningAnswers: 1,
+              status: 1,
+              resumeUrl: 1,
+              documents: 1,
+              notes: 1,
+              reviewedBy: 1,
+              reviewedAt: 1,
+              rejectionReason: 1,
+              interviewDate: 1,
+              interviewNotes: 1,
+              isWithdrawn: 1,
+              withdrawnAt: 1,
+              withdrawnReason: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              teacher: {
+                fullName: {
+                  $concat: ["$user.firstName", " ", "$user.lastName"],
+                },
+                email: "$user.email",
+                location: {
+                  country: "$teacherProfile.country",
+                  city: "$teacherProfile.city",
+                  province: "$teacherProfile.province",
+                  address: "$teacherProfile.address",
+                  zipCode: "$teacherProfile.zipCode",
+                },
+                phoneNumber: "$teacherProfile.phoneNumber",
+                qualification: "$teacherProfile.qualification",
+                subject: "$teacherProfile.subject",
+                yearsOfTeachingExperience:
+                  "$teacherProfile.yearsOfTeachingExperience",
+              },
+            },
+          },
+        ];
+
+        [applications, total] = await Promise.all([
+          JobApplication.aggregate(pipeline),
+          JobApplication.countDocuments(query),
+        ]);
+      } else {
+        // Standard sorting for other fields
+        const sort = {};
+        sort[actualSortBy] = sortOrder === "desc" ? -1 : 1;
+
+        [applications, total] = await Promise.all([
+          JobApplication.find(query)
+            .populate({
+              path: "teacherId",
+              populate: {
+                path: "userId",
+                select: "firstName lastName email",
+              },
+            })
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+          JobApplication.countDocuments(query),
+        ]);
+
+        // Transform the data to include teacher information in a consistent format
+        applications = applications.map((app) => {
+          const teacher = app.teacherId;
+          const user = teacher?.userId;
+
+          return {
+            ...app,
+            teacher: {
+              fullName: user
+                ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+                : "",
+              email: user?.email || "",
+              location: {
+                country: teacher?.country || "",
+                city: teacher?.city || "",
+                province: teacher?.province || "",
+                address: teacher?.address || "",
+                zipCode: teacher?.zipCode || "",
+              },
+              phoneNumber: teacher?.phoneNumber || "",
+              qualification: teacher?.qualification || "",
+              subject: teacher?.subject || "",
+              yearsOfTeachingExperience:
+                teacher?.yearsOfTeachingExperience || 0,
+            },
+            teacherId: app.teacherId?._id || app.teacherId,
+          };
+        });
+      }
 
       const totalPages = Math.ceil(total / limit);
       const hasNextPage = page < totalPages;
@@ -328,7 +532,7 @@ class AdminJobManagementService {
   }
 
   // Bulk update job statuses
-  async bulkUpdateJobStatuses(jobIds, status, reason) {
+  static async bulkUpdateJobStatuses(jobIds, status, reason) {
     try {
       const validStatuses = ["draft", "published", "closed", "expired"];
 
@@ -373,7 +577,7 @@ class AdminJobManagementService {
   }
 
   // Get job analytics
-  async getJobAnalytics(period = "30d") {
+  static async getJobAnalytics(period = "30d") {
     try {
       const now = new Date();
       let startDate;
@@ -505,7 +709,7 @@ class AdminJobManagementService {
   }
 
   // Helper methods
-  formatSalaryRange(job) {
+  static formatSalaryRange(job) {
     if (!job.salaryDisclose) {
       return "Competitive";
     }
@@ -521,19 +725,19 @@ class AdminJobManagementService {
     return "Competitive";
   }
 
-  calculateDaysPosted(publishedAt) {
+  static calculateDaysPosted(publishedAt) {
     if (!publishedAt) return null;
     const now = new Date();
     const diffTime = Math.abs(now - publishedAt);
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  isJobExpired(applicationDeadline) {
+  static isJobExpired(applicationDeadline) {
     if (!applicationDeadline) return false;
     return new Date() > applicationDeadline;
   }
 
-  getStatusDisplay(status) {
+  static getStatusDisplay(status) {
     const statusMap = {
       draft: "Pending",
       published: "Active",
@@ -543,7 +747,7 @@ class AdminJobManagementService {
     return statusMap[status] || status;
   }
 
-  convertToCSV(jobs) {
+  static convertToCSV(jobs) {
     const headers = [
       "Job Title",
       "Organization",
@@ -565,10 +769,10 @@ class AdminJobManagementService {
         `"${job.organization}"`,
         `"${job.city}, ${job.country}"`,
         `"${job.jobType}"`,
-        `"${this.getStatusDisplay(job.status)}"`,
+        `"${AdminJobManagementService.getStatusDisplay(job.status)}"`,
         job.applicantsCount || 0,
         job.viewsCount || 0,
-        `"${this.formatSalaryRange(job)}"`,
+        `"${AdminJobManagementService.formatSalaryRange(job)}"`,
         job.publishedAt
           ? new Date(job.publishedAt).toISOString().split("T")[0]
           : "",

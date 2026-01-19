@@ -4,6 +4,7 @@ const { authenticateToken } = require("../middleware/auth");
 const { validate } = require("../middleware/validation");
 const {
   createOrUpdateTeacherProfile,
+  updateTeacherProfile,
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,
@@ -49,6 +50,9 @@ router.post(
   validate("teacherProfile"),
   createOrUpdateTeacherProfile
 );
+
+// Update teacher profile (PATCH method for partial updates)
+router.patch("/updateTeacherProfile", authenticateToken, updateTeacherProfile);
 
 // Get current user's teacher profile (requires authentication)
 router.get("/me", authenticateToken, getTeacherProfile);
@@ -121,6 +125,5 @@ router.post("/me/activities", authenticateToken, addActivity);
 router.get("/me/activities", authenticateToken, getActivities);
 router.put("/me/activities/:id", authenticateToken, updateActivity);
 router.delete("/me/activities/:id", authenticateToken, deleteActivity);
-
 
 module.exports = router;

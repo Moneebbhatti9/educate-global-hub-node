@@ -34,6 +34,7 @@ const emailSubjects = {
     "Application Submitted Successfully - Educate Global Hub",
   newApplicationNotification:
     "New Job Application Received - Educate Global Hub",
+  resourceApprovalRejection: "Resource Status Update - Educate Global Hub",
 };
 
 // Send email function
@@ -49,7 +50,6 @@ const sendEmail = async (to, subject, html) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully:", result.messageId);
     return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Email sending error:", error);
@@ -102,6 +102,20 @@ const sendNewApplicationNotificationEmail = async (email, templateData) => {
   return await sendEmail(email, emailSubjects.newApplicationNotification, html);
 };
 
+const sendResourceStatusUpdateEmail = async (
+  email,
+  userName,
+  resourceTitle,
+  status
+) => {
+  const html = await getEmailTemplate("resource-status-update", {
+    userName,
+    resourceTitle,
+    status: status.charAt(0).toUpperCase() + status.slice(1), // Capitalize
+  });
+
+  return await sendEmail(email, emailSubjects.resourceApprovalRejection, html);
+};
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -109,4 +123,5 @@ module.exports = {
   sendWelcomeEmail,
   sendApplicationConfirmationEmail,
   sendNewApplicationNotificationEmail,
+  sendResourceStatusUpdateEmail,
 };

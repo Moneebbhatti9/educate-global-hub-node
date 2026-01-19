@@ -29,9 +29,9 @@ const validateAdminUserCreation = (req, res, next) => {
       phoneNumber,
       country,
       city,
-      province,
-      zipCode,
-      address,
+      stateProvince,
+      postalCode,
+      streetAddress,
       qualification,
       subject,
       pgce,
@@ -40,7 +40,34 @@ const validateAdminUserCreation = (req, res, next) => {
       keyAchievements,
       certifications,
       additionalQualifications,
+      professionalTitle,
+      linkedin,
+      languages,
     } = req.body;
+
+    if (!streetAddress || streetAddress.trim().length < 3) {
+      errors.streetAddress = "Street address is required and must be valid";
+    }
+
+    if (!stateProvince || stateProvince.trim().length < 2) {
+      errors.stateProvince = "State/Province is required";
+    }
+
+    if (
+      postalCode &&
+      postalCode.trim().length > 0 &&
+      postalCode.trim().length < 3
+    ) {
+      errors.postalCode = "Postal code must be at least 3 characters long";
+    }
+
+    if (!city) {
+      errors.city = "City is required";
+    }
+
+    if (!country) {
+      errors.country = "Country is required";
+    }
 
     if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
       errors.phoneNumber =
@@ -74,14 +101,38 @@ const validateAdminUserCreation = (req, res, next) => {
         "Professional bio must be less than 1000 characters";
     }
 
+    if (linkedin && !isValidUrl(linkedin)) {
+      errors.linkedin = "LinkedIn must be a valid URL";
+    }
+
+    if (languages && !Array.isArray(languages)) {
+      errors.languages = "Languages must be an array of objects";
+    } else if (Array.isArray(languages)) {
+      languages.forEach((lang, i) => {
+        if (!lang.language) {
+          errors[`languages[${i}].language`] = "Language name is required";
+        }
+        if (
+          lang.proficiency &&
+          ![
+            "Native",
+            "Fluent",
+            "Advanced",
+            "Intermediate",
+            "Beginner",
+          ].includes(lang.proficiency)
+        ) {
+          errors[`languages[${i}].proficiency`] = "Invalid proficiency level";
+        }
+      });
+    }
+
     if (keyAchievements && !Array.isArray(keyAchievements)) {
       errors.keyAchievements = "Key achievements must be an array";
     }
-
     if (certifications && !Array.isArray(certifications)) {
       errors.certifications = "Certifications must be an array";
     }
-
     if (additionalQualifications && !Array.isArray(additionalQualifications)) {
       errors.additionalQualifications =
         "Additional qualifications must be an array";
@@ -93,9 +144,9 @@ const validateAdminUserCreation = (req, res, next) => {
       schoolContactNumber,
       country,
       city,
-      province,
-      zipCode,
-      address,
+      stateProvince,
+      postalCode,
+      streetAddress,
       curriculum,
       schoolSize,
       schoolType,
@@ -103,6 +154,22 @@ const validateAdminUserCreation = (req, res, next) => {
       ageGroup,
       aboutSchool,
     } = req.body;
+
+    if (!streetAddress || streetAddress.trim().length < 3) {
+      errors.streetAddress = "Street address is required and must be valid";
+    }
+
+    if (!stateProvince || stateProvince.trim().length < 2) {
+      errors.stateProvince = "State/Province is required";
+    }
+
+    if (
+      postalCode &&
+      postalCode.trim().length > 0 &&
+      postalCode.trim().length < 3
+    ) {
+      errors.postalCode = "Postal code must be at least 3 characters long";
+    }
 
     if (schoolName && schoolName.trim().length < 2) {
       errors.schoolName = "School name must be at least 2 characters";
@@ -173,7 +240,8 @@ const validateAdminUserCreation = (req, res, next) => {
 const validateAdminUserUpdate = (req, res, next) => {
   const errors = {};
 
-  const { firstName, lastName, email, role, phone } = req.body;
+  const { firstName, lastName, email, role, phoneNumber, alternatePhone } =
+    req.body;
 
   if (firstName !== undefined && firstName.trim().length < 2) {
     errors.firstName = "First name must be at least 2 characters";
@@ -195,8 +263,131 @@ const validateAdminUserUpdate = (req, res, next) => {
       "Invalid role. Must be teacher, school, recruiter, or supplier";
   }
 
-  if (phone !== undefined && phone !== null && !isValidPhoneNumber(phone)) {
-    errors.phone = "Phone number must include country code (e.g., +1234567890)";
+  if (phoneNumber !== undefined && !isValidPhoneNumber(phoneNumber)) {
+    errors.phoneNumber =
+      "Phone number must include country code (e.g., +1234567890)";
+  }
+
+  if (alternatePhone !== undefined && !isValidPhoneNumber(alternatePhone)) {
+    errors.alternatePhone =
+      "Alternate phone must include country code (e.g., +1234567890)";
+  }
+
+  // --- Teacher-specific updates ---
+  if (role === "teacher") {
+    const {
+      qualification,
+      yearsOfTeachingExperience,
+      professionalBio,
+      languages,
+    } = req.body;
+
+    if (
+      qualification !== undefined &&
+      ![
+        "Bachelor",
+        "Master",
+        "PhD",
+        "Diploma",
+        "Certificate",
+        "Other",
+      ].includes(qualification)
+    ) {
+      errors.qualification = "Invalid qualification";
+    }
+
+    if (
+      yearsOfTeachingExperience !== undefined &&
+      (yearsOfTeachingExperience < 0 || yearsOfTeachingExperience > 50)
+    ) {
+      errors.yearsOfTeachingExperience =
+        "Years of experience must be between 0 and 50";
+    }
+
+    if (professionalBio !== undefined && professionalBio.length > 1000) {
+      errors.professionalBio =
+        "Professional bio must be less than 1000 characters";
+    }
+
+    if (languages !== undefined) {
+      if (!Array.isArray(languages)) {
+        errors.languages = "Languages must be an array of objects";
+      } else {
+        languages.forEach((lang, i) => {
+          if (lang.language !== undefined && !lang.language.trim()) {
+            errors[`languages[${i}].language`] = "Language name is required";
+          }
+          if (
+            lang.proficiency !== undefined &&
+            ![
+              "Native",
+              "Fluent",
+              "Advanced",
+              "Intermediate",
+              "Beginner",
+            ].includes(lang.proficiency)
+          ) {
+            errors[`languages[${i}].proficiency`] = "Invalid proficiency level";
+          }
+        });
+      }
+    }
+  }
+
+  // --- School-specific updates ---
+  if (role === "school") {
+    const {
+      schoolSize,
+      schoolType,
+      genderType,
+      curriculum,
+      ageGroup,
+      aboutSchool,
+    } = req.body;
+
+    if (
+      schoolSize !== undefined &&
+      ![
+        "Small (1-500 students)",
+        "Medium (501-1000 students)",
+        "Large (1001+ students)",
+      ].includes(schoolSize)
+    ) {
+      errors.schoolSize = "Invalid school size";
+    }
+
+    if (
+      schoolType !== undefined &&
+      ![
+        "Public",
+        "Private",
+        "International",
+        "Charter",
+        "Religious",
+        "Other",
+      ].includes(schoolType)
+    ) {
+      errors.schoolType = "Invalid school type";
+    }
+
+    if (
+      genderType !== undefined &&
+      !["Boys Only", "Girls Only", "Mixed"].includes(genderType)
+    ) {
+      errors.genderType = "Invalid gender type";
+    }
+
+    if (curriculum !== undefined && !Array.isArray(curriculum)) {
+      errors.curriculum = "Curriculum must be an array";
+    }
+
+    if (ageGroup !== undefined && !Array.isArray(ageGroup)) {
+      errors.ageGroup = "Age group must be an array";
+    }
+
+    if (aboutSchool !== undefined && aboutSchool.length > 2000) {
+      errors.aboutSchool = "About school must be less than 2000 characters";
+    }
   }
 
   if (Object.keys(errors).length > 0) {

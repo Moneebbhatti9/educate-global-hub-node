@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { isValidPhoneNumber } = require("../utils/phoneUtils");
+const validator = require("validator");
 
 const teacherProfileSchema = new mongoose.Schema(
   {
@@ -8,66 +9,118 @@ const teacherProfileSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    // Personal Information
-    fullName: {
+
+    // ---- Personal Details & Contact Information ----
+    firstName: { type: String, required: true, trim: true },
+    lastName: { type: String, required: true, trim: true },
+    professionalTitle: { type: String, trim: true }, // e.g. "Math Teacher & Curriculum Developer"
+
+    email: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
+      validate: {
+        validator: validator.isEmail,
+        message: "Invalid email address",
+      },
     },
+
     phoneNumber: {
       type: String,
       required: true,
       trim: true,
       validate: {
-        validator: function (value) {
-          return isValidPhoneNumber(value);
-        },
+        validator: (value) => isValidPhoneNumber(value),
         message: "Phone number must include country code (e.g., +1234567890)",
       },
     },
-
-    // Location Information
-    country: {
+    alternatePhone: {
       type: String,
-      required: true,
       trim: true,
-    },
-    city: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    province: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    zipCode: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    address: {
-      type: String,
-      required: true,
-      trim: true,
+      validate: {
+        validator: (v) => !v || isValidPhoneNumber(v),
+        message:
+          "Alternate phone must include country code (e.g., +1234567890)",
+      },
     },
 
-    // Professional Information
+    dateOfBirth: { type: Date, required: false },
+    placeOfBirth: { type: String, required: false, trim: true },
+    nationality: { type: String, required: false, trim: true },
+    passportNumber: {
+      type: String,
+      required: false,
+      trim: true,
+      minlength: 5,
+      maxlength: 30,
+      match: [
+        /^[A-Za-z0-9\-]+$/,
+        "Passport number can contain letters, numbers, and hyphens",
+      ],
+    },
+
+    gender: {
+      type: String,
+      required: false,
+      enum: ["Male", "Female", "Non-binary", "Prefer not to say", "Other"],
+    },
+    maritalStatus: {
+      type: String,
+      required: false,
+      enum: ["Single", "Married", "Divorced", "Widowed", "Other"],
+    },
+
+    // ---- Address Information ----
+    streetAddress: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    stateProvince: { type: String, required: true, trim: true },
+    country: { type: String, required: true, trim: true },
+    postalCode: { type: String, required: false, trim: true },
+
+    // ---- Professional Links ----
+    linkedin: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      validate: {
+        validator: (v) =>
+          !v ||
+          validator.isURL(v, {
+            protocols: ["http", "https"],
+            require_protocol: false,
+          }),
+        message: "LinkedIn must be a valid URL",
+      },
+    },
+
+    // ---- Languages ----
+    languages: {
+      type: [
+        {
+          language: { type: String, required: true, trim: true },
+          proficiency: {
+            type: String,
+            required: true,
+            enum: ["Native", "Fluent", "Advanced", "Intermediate", "Beginner"],
+          },
+          isNative: { type: Boolean, default: false }, // optional flag
+        },
+      ],
+      default: [],
+    },
+
+    // ---- Existing Fields (kept as is) ----
+    province: { type: String, required: true, trim: true }, // kept for backward compatibility
+    address: { type: String, required: true, trim: true },
+
     qualification: {
       type: String,
       enum: ["Bachelor", "Master", "PhD", "Diploma", "Certificate", "Other"],
       required: true,
     },
-    subject: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    pgce: {
-      type: Boolean,
-      default: false,
-    },
+    subject: { type: String, required: true, trim: true },
+    pgce: { type: Boolean, default: false },
     yearsOfTeachingExperience: {
       type: Number,
       required: true,
@@ -75,40 +128,15 @@ const teacherProfileSchema = new mongoose.Schema(
       max: 50,
     },
 
-    // Professional Details
-    professionalBio: {
-      type: String,
-      required: true,
-      maxlength: 1000,
-    },
-    keyAchievements: {
-      type: [String],
-      default: [],
-    },
-    certifications: {
-      type: [String],
-      default: [],
-    },
+    professionalBio: { type: String, required: true, maxlength: 1000 },
+    keyAchievements: { type: [String], default: [] },
+    certifications: { type: [String], default: [] },
+    additionalQualifications: { type: [String], default: [] },
 
-    // Additional Information
-    additionalQualifications: {
-      type: [String],
-      default: [],
-    },
-
-    // Profile Status
-    isProfileComplete: {
-      type: Boolean,
-      default: false,
-    },
-    profileCompletion: {
-      type: Number,
-      default: 0,
-    },
+    isProfileComplete: { type: Boolean, default: false },
+    profileCompletion: { type: Number, default: 0 },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 // Index for better query performance
@@ -146,13 +174,15 @@ teacherProfileSchema.pre("save", function (next) {
 // Method to check if profile is complete
 teacherProfileSchema.methods.checkProfileCompletion = async function () {
   const requiredFields = [
-    "fullName",
+    "firstName",
+    "lastName",
+    "email",
     "phoneNumber",
     "country",
     "city",
-    "province",
-    "zipCode",
-    "address",
+    "stateProvince",
+    "postalCode",
+    "streetAddress",
     "qualification",
     "subject",
     "yearsOfTeachingExperience",

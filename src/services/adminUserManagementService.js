@@ -149,7 +149,7 @@ class AdminUserManagementService {
       country,
       city,
       province,
-      zipCode,
+      postalCode,
       address,
       qualification,
       subject,
@@ -214,22 +214,47 @@ class AdminUserManagementService {
     if (role === "teacher") {
       const teacherProfile = new TeacherProfile({
         userId: user._id,
-        fullName: `${firstName} ${lastName}`,
+
+        // --- Required Personal/Contact ---
+        firstName,
+        lastName,
+        professionalTitle: userData.professionalTitle || "",
+        email, // required now
         phoneNumber: phoneNumber || "",
-        country: country || "",
+        alternatePhone: userData.alternatePhone || "",
+
+        dateOfBirth: userData.dateOfBirth || null,
+        placeOfBirth: userData.placeOfBirth || "",
+        nationality: userData.nationality || "",
+        passportNumber: userData.passportNumber || "",
+        gender: userData.gender || undefined,
+        maritalStatus: userData.maritalStatus || undefined,
+
+        // --- Address (all required now) ---
+        streetAddress: userData.streetAddress || address || "",
         city: city || "",
-        province: province || "",
-        zipCode: zipCode || "",
-        address: address || "",
+        stateProvince: userData.stateProvince || province || "",
+        country: country || "",
+        postalCode: userData.postalCode || postalCode || "",
+
+        linkedin: userData.linkedin || "",
+
+        // --- Professional ---
         qualification: qualification || "Bachelor",
         subject: subject || "",
         pgce: pgce || false,
         yearsOfTeachingExperience: yearsOfTeachingExperience || 0,
         professionalBio: professionalBio || "",
+
         keyAchievements: keyAchievements || [],
         certifications: certifications || [],
         additionalQualifications: additionalQualifications || [],
+
+        // Legacy fields (still required by schema)
+        province: userData.stateProvince || province || "",
+        address: userData.streetAddress || address || "",
       });
+
       await teacherProfile.save();
     } else if (role === "school") {
       const schoolProfile = new SchoolProfile({
@@ -237,11 +262,14 @@ class AdminUserManagementService {
         schoolName: schoolName || "",
         schoolEmail: schoolEmail || email,
         schoolContactNumber: schoolContactNumber || "",
-        country: country || "",
+
+        // --- Address ---
+        streetAddress: userData.streetAddress || address || "",
         city: city || "",
-        province: province || "",
-        zipCode: zipCode || "",
-        address: address || "",
+        stateProvince: userData.stateProvince || province || "",
+        country: country || "",
+        postalCode: userData.postalCode || postalCode || "",
+
         curriculum: curriculum || [],
         schoolSize: schoolSize || "Small (1-500 students)",
         schoolType: schoolType || "Public",
@@ -250,6 +278,7 @@ class AdminUserManagementService {
         schoolWebsite: schoolWebsite || "",
         aboutSchool: aboutSchool || "",
       });
+
       await schoolProfile.save();
     }
 
@@ -261,31 +290,117 @@ class AdminUserManagementService {
   }
 
   // Update user
-  static async updateUser(userId, updateData) {
-    const { firstName, lastName, email, role, phone } = updateData;
-
+  static async updateUserProfile(userId, profileData) {
     const user = await User.findById(userId);
     if (!user) {
       throw new Error("User not found");
     }
 
-    // Check if email is being changed and if it already exists
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        throw new Error("Email already exists");
+    let profile = null;
+
+    if (user.role === "teacher") {
+      profile = await TeacherProfile.findOne({ userId });
+      if (!profile) {
+        throw new Error("Teacher profile not found");
       }
+
+      // --- Normalize teacher fields ---
+      if (profileData.phoneNumber) {
+        const { validateAndFormatPhone } = require("../utils/phoneUtils");
+        const phoneValidation = validateAndFormatPhone(
+          profileData.phoneNumber,
+          profileData.country
+        );
+        if (!phoneValidation.isValid) throw new Error(phoneValidation.error);
+        profileData.phoneNumber = phoneValidation.formatted;
+      }
+
+      if (profileData.alternatePhone) {
+        const { validateAndFormatPhone } = require("../utils/phoneUtils");
+        const altVal = validateAndFormatPhone(
+          profileData.alternatePhone,
+          profileData.country
+        );
+        if (!altVal.isValid)
+          throw new Error(`Alternate phone: ${altVal.error}`);
+        profileData.alternatePhone = altVal.formatted;
+      }
+
+      if (profileData.dateOfBirth) {
+        const dob = new Date(profileData.dateOfBirth);
+        if (isNaN(dob.getTime())) throw new Error("Invalid dateOfBirth");
+        profileData.dateOfBirth = dob;
+      }
+
+      if (profileData.languages) {
+        profileData.languages = profileData.languages
+          .map((l) => ({
+            language: String(l.language || l.name || "").trim(),
+            proficiency: l.proficiency,
+            isNative:
+              !!l.isNative ||
+              String(l.proficiency || "").toLowerCase() === "native",
+          }))
+          .filter((l) => l.language);
+      }
+
+      // --- Backward compat mapping ---
+      if (profileData.stateProvince)
+        profileData.province = profileData.stateProvince;
+      if (profileData.streetAddress)
+        profileData.address = profileData.streetAddress;
+      if (profileData.postalCode) profileData.zipCode = profileData.postalCode;
+
+      // Assign only valid schema fields
+      Object.keys(profileData).forEach((key) => {
+        if (profile.schema.paths[key]) {
+          profile[key] = profileData[key];
+        }
+      });
+
+      await profile.save();
+
+      // --- Recalculate profile completion ---
+      const completion = await profile.checkProfileCompletion();
+      profile.profileCompletion = completion;
+      profile.isProfileComplete = completion === 100;
+      await profile.save();
+    } else if (user.role === "school") {
+      profile = await SchoolProfile.findOne({ userId });
+      if (!profile) {
+        throw new Error("School profile not found");
+      }
+
+      // --- Normalize school fields ---
+      if (profileData.schoolContactNumber) {
+        const { validateAndFormatPhone } = require("../utils/phoneUtils");
+        const phoneValidation = validateAndFormatPhone(
+          profileData.schoolContactNumber,
+          profileData.country
+        );
+        if (!phoneValidation.isValid) throw new Error(phoneValidation.error);
+        profileData.schoolContactNumber = phoneValidation.formatted;
+      }
+
+      if (profileData.curriculum && !Array.isArray(profileData.curriculum)) {
+        profileData.curriculum = [profileData.curriculum];
+      }
+
+      if (profileData.ageGroup && !Array.isArray(profileData.ageGroup)) {
+        profileData.ageGroup = [profileData.ageGroup];
+      }
+
+      // Assign only valid schema fields
+      Object.keys(profileData).forEach((key) => {
+        if (profile.schema.paths[key]) {
+          profile[key] = profileData[key];
+        }
+      });
+
+      await profile.save();
     }
 
-    // Update user fields
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
-    if (email) user.email = email;
-    if (role) user.role = role;
-    if (phone !== undefined) user.phone = phone;
-
-    await user.save();
-    return user.toSafeObject();
+    return profile;
   }
 
   // Delete user

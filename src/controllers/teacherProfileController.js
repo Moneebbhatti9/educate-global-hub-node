@@ -18,24 +18,133 @@ const {
 const {
   computeProfileCompletion,
 } = require("../services/profileCompletionService");
+const { getTeacherProfileForUser } = require("../utils/getTeacherprofile");
+
+// Update teacher profile (PATCH method for partial updates)
+const updateTeacherProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updateData = req.body;
+
+    // Verify user exists and is teacher
+    const user = await User.findById(userId);
+    if (!user) return errorResponse(res, "User not found", 404);
+    if (user.role !== "teacher")
+      return errorResponse(
+        res,
+        "Only teachers can update teacher profiles",
+        403
+      );
+
+    // Check profile exists
+    const existingProfile = await TeacherProfile.findOne({ userId });
+    if (!existingProfile) {
+      return errorResponse(res, "Teacher profile not found", 404);
+    }
+
+    // Normalize phone fields (schema validates + pre-save formats)
+    if (updateData.phoneNumber && !updateData.phoneNumber.startsWith("+")) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.phoneNumber = formatPhoneNumber(
+        updateData.phoneNumber,
+        updateData.country || existingProfile.country
+      );
+    }
+    if (
+      updateData.alternatePhone &&
+      !updateData.alternatePhone.startsWith("+")
+    ) {
+      const { formatPhoneNumber } = require("../utils/phoneUtils");
+      updateData.alternatePhone = formatPhoneNumber(
+        updateData.alternatePhone,
+        updateData.country || existingProfile.country
+      );
+    }
+
+    // Handle DOB parsing if provided
+    if (updateData.dateOfBirth) {
+      const dob = new Date(updateData.dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        return errorResponse(res, "Invalid dateOfBirth format", 400);
+      }
+      updateData.dateOfBirth = dob;
+    }
+
+    // Update profile with $set to allow partial updates
+    let updatedProfile = await TeacherProfile.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    // Recalculate profile completion (percentage) and update directly
+    const completion = await updatedProfile.checkProfileCompletion();
+    await TeacherProfile.findByIdAndUpdate(updatedProfile._id, {
+      $set: {
+        profileCompletion: completion,
+        isProfileComplete: completion >= 80,
+      },
+    });
+
+    // Update the local object for response
+    updatedProfile.profileCompletion = completion;
+    updatedProfile.isProfileComplete = completion >= 80;
+
+    return successResponse(
+      res,
+      updatedProfile,
+      "Teacher profile updated successfully"
+    );
+  } catch (error) {
+    console.error("Error updating teacher profile:", error);
+    return errorResponse(res, "Failed to update teacher profile", 500);
+  }
+};
+
 // Create or update teacher profile
 const createOrUpdateTeacherProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const {
-      fullName,
-      phoneNumber,
-      country,
-      city,
+    let {
+      // Legacy (accept old payloads)
       province,
       zipCode,
       address,
+
+      // New/normalized personal fields
+      firstName,
+      lastName,
+      professionalTitle,
+      email,
+      phoneNumber,
+      alternatePhone,
+      dateOfBirth,
+      placeOfBirth,
+      nationality,
+      passportNumber,
+      gender,
+      maritalStatus,
+
+      // Address fields
+      streetAddress,
+      city,
+      stateProvince,
+      country,
+      postalCode,
+      linkedin,
+
+      // Languages array (from modal)
+      languages,
+
+      // Professional fields
       qualification,
       subject,
       pgce,
       yearsOfTeachingExperience,
       professionalBio,
       keyAchievements,
+      certifications,
+      additionalQualifications,
     } = req.body;
 
     //  Check if user exists and is a teacher
@@ -48,62 +157,157 @@ const createOrUpdateTeacherProfile = async (req, res) => {
         403
       );
 
-    //  Validate and format phone number
-    const phoneValidation = validateAndFormatPhone(phoneNumber, country);
-    if (!phoneValidation.isValid) {
-      return errorResponse(res, phoneValidation.error, 400);
+    // Fetch existing profile early (needed for fallbacks)
+    let teacherProfile = await TeacherProfile.findOne({ userId });
+
+    const countryForPhone = country || teacherProfile?.country;
+
+    // Validate & format primary phone
+    let formattedPhone;
+    if (phoneNumber !== undefined) {
+      const phoneValidation = validateAndFormatPhone(
+        phoneNumber,
+        countryForPhone
+      );
+      if (!phoneValidation.isValid) {
+        return errorResponse(res, phoneValidation.error, 400);
+      }
+      formattedPhone = phoneValidation.formatted;
     }
 
-    //  Check if profile exists
-    let teacherProfile = await TeacherProfile.findOne({ userId });
+    // Validate & format alternate phone
+    let formattedAlternatePhone;
+    if (alternatePhone) {
+      const altVal = validateAndFormatPhone(alternatePhone, countryForPhone);
+      if (!altVal.isValid) {
+        return errorResponse(res, `Alternate phone: ${altVal.error}`, 400);
+      }
+      formattedAlternatePhone = altVal.formatted;
+    }
+
+    // Validate date of birth
+    let dob;
+    if (dateOfBirth) {
+      dob = new Date(dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        return errorResponse(
+          res,
+          "Invalid dateOfBirth. Use YYYY-MM-DD or ISO date.",
+          400
+        );
+      }
+    }
+
+    // Normalize languages
+    const normalizedLanguages = Array.isArray(languages)
+      ? languages
+          .map((l) => ({
+            language: String(l.language || l.name || "").trim(),
+            proficiency: l.proficiency,
+            isNative:
+              !!l.isNative ||
+              String(l.proficiency || "").toLowerCase() === "native",
+          }))
+          .filter((l) => l.language) // drop empty entries
+      : [];
+
+    // Build update data
+    const updateData = {
+      // personal / contact
+      firstName,
+      lastName,
+      professionalTitle,
+      phoneNumber: formattedPhone,
+      alternatePhone: formattedAlternatePhone,
+      dateOfBirth: dob,
+      placeOfBirth,
+      nationality,
+      passportNumber,
+      gender,
+      maritalStatus,
+
+      // address
+      city,
+      country,
+      linkedin,
+
+      // languages
+      ...(Array.isArray(languages) ? { languages: normalizedLanguages } : {}),
+
+      // professional
+      qualification,
+      subject,
+      ...(pgce !== undefined ? { pgce: !!pgce } : {}),
+      yearsOfTeachingExperience,
+      professionalBio,
+      keyAchievements,
+      certifications,
+      additionalQualifications,
+
+      // persist legacy fields for backward compatibility
+      streetAddress: streetAddress || address,
+      stateProvince: stateProvince || province,
+      postalCode: postalCode || zipCode,
+      province: stateProvince || province,
+      address: streetAddress || address,
+    };
+
+    // Email handling: keep provided, fallback to account email only on creation
+    if (email) updateData.email = email;
+    else if (!teacherProfile) updateData.email = user.email;
+
+    // Remove undefined values (allows partial updates)
+    Object.keys(updateData).forEach(
+      (k) => updateData[k] === undefined && delete updateData[k]
+    );
 
     if (teacherProfile) {
       // Update existing profile
-      const updateData = {
-        fullName,
-        phoneNumber: phoneValidation.formatted,
-        country,
-        city,
-        province,
-        zipCode,
-        address,
-        qualification,
-        subject,
-        pgce: pgce || false,
-        yearsOfTeachingExperience,
-        professionalBio,
-        keyAchievements: keyAchievements || [],
-      };
-
       teacherProfile = await TeacherProfile.findOneAndUpdate(
         { userId },
         updateData,
         { new: true, runValidators: true }
       );
     } else {
+      // Ensure required fields on create
+      const requiredOnCreate = [
+        "firstName",
+        "lastName",
+        "email",
+        "phoneNumber",
+        "streetAddress",
+        "city",
+        "stateProvince",
+        "country",
+        "qualification",
+        "subject",
+        "yearsOfTeachingExperience",
+        "professionalBio",
+      ];
+
+      const missing = requiredOnCreate.filter(
+        (f) => !updateData[f] && updateData[f] !== 0
+      );
+
+      if (missing.length) {
+        return errorResponse(
+          res,
+          `Missing required fields for profile creation: ${missing.join(", ")}`,
+          400
+        );
+      }
+
       // Create new profile
       teacherProfile = new TeacherProfile({
         userId,
-        fullName,
-        phoneNumber: phoneValidation.formatted,
-        country,
-        city,
-        province,
-        zipCode,
-        address,
-        qualification,
-        subject,
-        pgce: pgce || false,
-        yearsOfTeachingExperience,
-        professionalBio,
-        keyAchievements: keyAchievements || [],
+        ...updateData,
       });
 
       await teacherProfile.save();
     }
 
-    //  Compute profile completion
-    const completion = await TeacherProfile.checkProfileCompletion();
+    // Compute profile completion
+    const completion = await teacherProfile.checkProfileCompletion();
     teacherProfile.profileCompletion = completion;
     teacherProfile.isProfileComplete = completion === 100;
     await teacherProfile.save();
@@ -113,6 +317,8 @@ const createOrUpdateTeacherProfile = async (req, res) => {
       profileCompletion: completion,
       isProfileComplete: completion === 100,
     });
+
+    // Fetch related collections
     const [employment, education, qualifications, referees] = await Promise.all(
       [
         TeacherEmployment.find({ teacherId: teacherProfile._id }),
@@ -175,9 +381,18 @@ const getTeacherProfile = async (req, res) => {
       teacherProfile.profileCompletion !== completion ||
       teacherProfile.isProfileComplete !== (completion === 100)
     ) {
+      // Update only the completion fields without triggering full validation
+      await TeacherProfile.findByIdAndUpdate(
+        teacherProfile._id,
+        {
+          profileCompletion: completion,
+          isProfileComplete: completion === 100,
+        },
+        { new: true }
+      );
+      // Update the local object for response
       teacherProfile.profileCompletion = completion;
       teacherProfile.isProfileComplete = completion === 100;
-      await teacherProfile.save();
     }
     return successResponse(res, "Teacher profile retrieved successfully", {
       data: {
@@ -240,9 +455,11 @@ const getTeacherProfileById = async (req, res) => {
       memberships,
     };
 
-    return successResponse(res,
+    return successResponse(
+      res,
       publicProfile,
-      "Teacher profile retrieved successfully");
+      "Teacher profile retrieved successfully"
+    );
   } catch (error) {
     console.error("Error in getTeacherProfileById:", error);
     return errorResponse(res, "Failed to retrieve teacher profile", 500);
@@ -578,9 +795,16 @@ const addCertification = async (req, res) => {
 
     // recompute completion
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification added", { data: created });
   } catch (err) {
@@ -605,9 +829,16 @@ const updateCertification = async (req, res) => {
     if (!updated) return errorResponse(res, "Certification not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification updated", { data: updated });
   } catch (err) {
@@ -631,9 +862,16 @@ const deleteCertification = async (req, res) => {
     if (!deleted) return errorResponse(res, "Certification not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Certification deleted", { data: deleted });
   } catch (err) {
@@ -671,9 +909,16 @@ const addDevelopment = async (req, res) => {
     const created = await TeacherDevelopment.create(payload);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development added", { data: created });
   } catch (err) {
@@ -699,9 +944,16 @@ const updateDevelopment = async (req, res) => {
       return errorResponse(res, "Development record not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development updated", { data: updated });
   } catch (err) {
@@ -726,9 +978,16 @@ const deleteDevelopment = async (req, res) => {
       return errorResponse(res, "Development record not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Development deleted", { data: deleted });
   } catch (err) {
@@ -764,9 +1023,16 @@ const addMembership = async (req, res) => {
     const created = await TeacherMembership.create(payload);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership added", { data: created });
   } catch (err) {
@@ -791,9 +1057,16 @@ const updateMembership = async (req, res) => {
     if (!updated) return errorResponse(res, "Membership not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership updated", { data: updated });
   } catch (err) {
@@ -817,9 +1090,16 @@ const deleteMembership = async (req, res) => {
     if (!deleted) return errorResponse(res, "Membership not found", 404);
 
     const completion = await computeProfileCompletion(teacherProfile);
-    teacherProfile.profileCompletion = completion;
-    teacherProfile.isProfileComplete = completion === 100;
-    await teacherProfile.save();
+
+    // Update only the completion fields without triggering full validation
+    await TeacherProfile.findByIdAndUpdate(
+      teacherProfile._id,
+      {
+        profileCompletion: completion,
+        isProfileComplete: completion === 100,
+      },
+      { new: true }
+    );
 
     return successResponse(res, "Membership deleted", { data: deleted });
   } catch (err) {
@@ -932,6 +1212,7 @@ const deleteActivity = async (req, res) => {
 
 module.exports = {
   createOrUpdateTeacherProfile,
+  updateTeacherProfile,
   getTeacherProfile,
   getTeacherProfileById,
   searchTeachers,

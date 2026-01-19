@@ -74,7 +74,7 @@ const validationSchemas = {
       "number.min": "Limit must be at least 1",
       "number.max": "Limit cannot exceed 100",
     }),
-    search: Joi.string().optional().trim().max(100).messages({
+    search: Joi.string().optional().allow("").trim().max(100).messages({
       "string.max": "Search term cannot exceed 100 characters",
     }),
     status: Joi.string()
@@ -160,11 +160,19 @@ const validationSchemas = {
           "Invalid application status filter. Must be one of: pending, reviewed, shortlisted, rejected, accepted",
       }),
     sortBy: Joi.string()
-      .valid("createdAt", "updatedAt", "status", "teacherName")
+      .valid(
+        "createdAt",
+        "updatedAt",
+        "status",
+        "teacherName",
+        "appliedAt",
+        "expectedSalary",
+        "availableFrom"
+      )
       .default("createdAt")
       .messages({
         "any.only":
-          "Invalid sort field. Must be one of: createdAt, updatedAt, status, teacherName",
+          "Invalid sort field. Must be one of: createdAt, updatedAt, status, teacherName, appliedAt, expectedSalary, availableFrom",
       }),
     sortOrder: Joi.string().valid("asc", "desc").default("desc").messages({
       "any.only": "Sort order must be either 'asc' or 'desc'",

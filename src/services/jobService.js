@@ -67,7 +67,7 @@ class JobService {
           path: "applications",
           populate: {
             path: "teacherId",
-            select: "fullName email phoneNumber country city",
+            select: "firstName lastName email phoneNumber country city",
           },
         });
       }
@@ -235,7 +235,10 @@ class JobService {
       const skip = (page - 1) * limit;
 
       // Build query
-      const query = { status: "published" };
+      const query = {
+        status: "published",
+        applicationDeadline: { $gt: new Date() },
+      };
 
       // Text search
       if (filters.q) {
@@ -252,10 +255,7 @@ class JobService {
       }
 
       if (filters.location) {
-        query.$or = [
-          { country: { $regex: filters.location, $options: "i" } },
-          { city: { $regex: filters.location, $options: "i" } },
-        ];
+        query.country = { $regex: filters.location, $options: "i" };
       }
 
       // Salary filters
@@ -271,8 +271,11 @@ class JobService {
       }
 
       // Subjects filter
-      if (filters.subjects && filters.subjects.length > 0) {
-        query.subjects = { $in: filters.subjects };
+      if (filters.subjects) {
+        const subjectsArray = Array.isArray(filters.subjects)
+          ? filters.subjects
+          : [filters.subjects];
+        query.subjects = { $in: subjectsArray };
       }
 
       // Job type filter

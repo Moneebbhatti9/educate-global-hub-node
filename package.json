@@ -11,7 +11,8 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "start:prod": "npm start --omit=dev"
+    "start:prod": "npm start --omit=dev",
+    "create-admin": "node scripts/createAdminUser.js"
   },
   "keywords": [
     "education",
@@ -42,6 +43,8 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.8",
     "open": "^10.2.0",
+    "socket.io": "^4.8.1",
+    "stripe": "^19.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",

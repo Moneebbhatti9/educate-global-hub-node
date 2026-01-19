@@ -6,15 +6,18 @@ const swaggerUi = require("swagger-ui-express");
 const { errorHandler } = require("./errorHandler");
 const { notFoundHandler } = require("./notFoundHandler");
 const YAML = require("yamljs");
-const swaggerDocument = YAML.load("src/docs/swagger.yaml");
+const path = require("path");
+const swaggerDocument = YAML.load(path.join(__dirname, "../docs/swagger.yaml"));
 
 module.exports.applyMiddlewares = (app) => {
-  app.use(cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }));
+  app.use(
+    cors({
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      credentials: true,
+    })
+  );
   app.disable("x-powered-by");
 
   app.use(express.static("public"));
@@ -29,9 +32,6 @@ module.exports.applyMiddlewares = (app) => {
       })
     );
   }
-
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true }));
 
   app.use(
     morgan(":method :url :status :res[content-length] - :response-time ms")

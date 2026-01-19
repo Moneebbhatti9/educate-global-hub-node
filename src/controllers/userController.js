@@ -104,18 +104,33 @@ const updateProfile = async (req, res, next) => {
 // Get current user profile controller
 const getCurrentUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId).populate("profile");
+    const userId = req.user.userId;
+
+    // Get user with basic info
+    const user = await User.findById(userId);
     if (!user) {
       return notFoundResponse(res, "User not found");
     }
 
-    return successResponse(
-      res,
-      {
-        user: sanitizeUser(user),
-      },
-      "Profile retrieved successfully"
-    );
+    let profileData = null;
+
+    // Get associated profile based on user role
+    if (user.role === "teacher") {
+      const TeacherProfile = require("../models/TeacherProfile");
+      profileData = await TeacherProfile.findOne({ userId });
+    } else if (user.role === "school") {
+      const SchoolProfile = require("../models/SchoolProfile");
+      profileData = await SchoolProfile.findOne({ userId });
+    }
+
+    // Combine user data with profile data
+    const userData = sanitizeUser(user);
+    const responseData = {
+      user: userData,
+      profile: profileData,
+    };
+
+    return successResponse(res, responseData, "Profile retrieved successfully");
   } catch (error) {
     next(error);
   }
@@ -126,19 +141,35 @@ const getPublicUserProfile = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
-    const user = await User.findById(userId)
-      .populate("profile")
-      .select("-passwordHash -refreshTokens");
+    const user = await User.findById(userId).select(
+      "-passwordHash -refreshTokens"
+    );
 
     if (!user) {
       return notFoundResponse(res, "User not found");
     }
 
+    let profileData = null;
+
+    // Get associated profile based on user role
+    if (user.role === "teacher") {
+      const TeacherProfile = require("../models/TeacherProfile");
+      profileData = await TeacherProfile.findOne({ userId });
+    } else if (user.role === "school") {
+      const SchoolProfile = require("../models/SchoolProfile");
+      profileData = await SchoolProfile.findOne({ userId });
+    }
+
+    // Combine user data with profile data
+    const userData = sanitizeUser(user);
+    const responseData = {
+      user: userData,
+      profile: profileData,
+    };
+
     return successResponse(
       res,
-      {
-        user: sanitizeUser(user),
-      },
+      responseData,
       "User profile retrieved successfully"
     );
   } catch (error) {
