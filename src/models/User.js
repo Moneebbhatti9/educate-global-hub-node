@@ -62,6 +62,19 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // GDPR-related fields
+    deletionRequestedAt: {
+      type: Date,
+      default: null,
+    },
+    deletionReason: {
+      type: String,
+      default: null,
+    },
+    inactivityWarningAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

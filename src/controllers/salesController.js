@@ -347,25 +347,166 @@ async function getPurchaseBySession(req, res, next) {
     }
 
     // Find the purchase record
-    const purchase = await ResourcePurchase.findOne({
+    let purchase = await ResourcePurchase.findOne({
       resourceId: new mongoose.Types.ObjectId(resourceId),
       buyerId: new mongoose.Types.ObjectId(buyerId),
       status: "completed",
     }).sort({ purchaseDate: -1 });
 
     // Find the sale record
-    const sale = await Sale.findOne({
+    let sale = await Sale.findOne({
       resource: new mongoose.Types.ObjectId(resourceId),
       buyer: new mongoose.Types.ObjectId(buyerId),
       stripeSessionId: sessionId,
     }).sort({ saleDate: -1 });
 
+    // If purchase or sale not found but session is paid, create them
+    // This handles cases where webhook is delayed or fails
+    if ((!purchase || !sale) && session.payment_status === 'paid') {
+      console.log(`Creating purchase records for session ${sessionId} (webhook delayed)`);
+
+      try {
+        const { calculateRoyalty } = require("../utils/royaltyCalculator");
+        const SellerTier = require("../models/SellerTier");
+        const BalanceLedger = require("../models/BalanceLedger");
+
+        // Get metadata from session
+        const sellerId = session.metadata?.sellerId;
+        const royaltyRate = session.metadata?.royaltyRate;
+        const sellerTierName = session.metadata?.sellerTier;
+        const buyerCountry = session.metadata?.buyerCountry || "GB";
+
+        if (!sellerId) {
+          return errorResponse(res, "Seller information missing from session", 400);
+        }
+
+        // Get seller tier
+        const sellerTierDoc = await SellerTier.getOrCreateTier(sellerId);
+
+        // Calculate amounts
+        const amount = session.amount_total; // in smallest unit (pence/cents)
+        const currency = session.currency.toUpperCase();
+
+        // Calculate royalty split
+        const royaltyCalc = calculateRoyalty(
+          amount,
+          currency,
+          buyerCountry,
+          parseFloat(royaltyRate) || sellerTierDoc.royaltyRate,
+          sellerTierName || sellerTierDoc.currentTier
+        );
+
+        // Create purchase record if it doesn't exist
+        if (!purchase) {
+          try {
+            purchase = await ResourcePurchase.create({
+              resourceId: new mongoose.Types.ObjectId(resourceId),
+              buyerId: new mongoose.Types.ObjectId(buyerId),
+              pricePaid: amount / 100, // Convert to major unit
+              status: "completed",
+            });
+            console.log(`Created ResourcePurchase: ${purchase._id}`);
+          } catch (createError) {
+            // If duplicate key error, fetch the existing record
+            if (createError.code === 11000) {
+              console.log(`ResourcePurchase already exists, fetching...`);
+              purchase = await ResourcePurchase.findOne({
+                resourceId: new mongoose.Types.ObjectId(resourceId),
+                buyerId: new mongoose.Types.ObjectId(buyerId),
+                status: "completed",
+              }).sort({ purchaseDate: -1 });
+            } else {
+              throw createError;
+            }
+          }
+        }
+
+        // Create sale record if it doesn't exist
+        if (!sale) {
+          try {
+            sale = await Sale.create({
+              resource: new mongoose.Types.ObjectId(resourceId),
+              seller: new mongoose.Types.ObjectId(sellerId),
+              buyer: new mongoose.Types.ObjectId(buyerId),
+              price: royaltyCalc.originalPrice,
+              currency,
+              vatAmount: royaltyCalc.vatAmount,
+              transactionFee: royaltyCalc.transactionFee,
+              platformCommission: royaltyCalc.platformCommission,
+              sellerEarnings: royaltyCalc.sellerEarnings,
+              royaltyRate: royaltyCalc.royaltyRate,
+              sellerTier: royaltyCalc.sellerTier,
+              status: "completed",
+              stripeChargeId: session.payment_intent,
+              stripePaymentIntentId: session.payment_intent,
+              stripeSessionId: session.id,
+              buyerEmail: session.metadata?.buyerEmail || session.customer_email,
+              buyerCountry: buyerCountry,
+              license: "single",
+            });
+            console.log(`Created Sale: ${sale._id}`);
+
+            // Update balance ledger
+            await BalanceLedger.createEntry({
+              seller: new mongoose.Types.ObjectId(sellerId),
+              type: "credit",
+              amount: royaltyCalc.sellerEarnings,
+              currency,
+              referenceType: "sale",
+              referenceId: sale._id,
+              referenceModel: "Sale",
+              description: `Sale of "${resource.title}"`,
+              metadata: {
+                resourceId,
+                resourceTitle: resource.title,
+                buyerId,
+                buyerEmail: session.metadata?.buyerEmail || session.customer_email,
+                checkoutSessionId: session.id,
+              },
+            });
+
+            // Update seller tier
+            const salesData = await Sale.calculateSellerSales(sellerId, 12);
+            await sellerTierDoc.updateTier(salesData.totalSales);
+            sellerTierDoc.lifetimeSales += royaltyCalc.netPrice;
+            sellerTierDoc.lifetimeEarnings += royaltyCalc.sellerEarnings;
+            sellerTierDoc.lifetimeSalesCount += 1;
+            await sellerTierDoc.save();
+
+            console.log(`Purchase records created successfully for session ${sessionId}`);
+          } catch (createError) {
+            // If duplicate key error (webhook beat us to it), fetch the existing record
+            if (createError.code === 11000) {
+              console.log(`Sale already exists (webhook processed it), fetching...`);
+              sale = await Sale.findOne({
+                resource: new mongoose.Types.ObjectId(resourceId),
+                buyer: new mongoose.Types.ObjectId(buyerId),
+                stripeSessionId: sessionId,
+              }).sort({ saleDate: -1 });
+            } else {
+              throw createError;
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error creating purchase records for session ${sessionId}:`, error);
+        // Don't throw - let it retry or fall through to return null
+      }
+    }
+
+    // If still not found after attempting to create, return null
+    if (!purchase || !sale) {
+      return successResponse(res, {
+        purchase: null,
+      }, "Purchase is still being processed");
+    }
+
     return successResponse(res, {
       purchase: {
-        _id: purchase?._id,
-        purchaseDate: purchase?.purchaseDate || new Date(),
-        pricePaid: purchase?.pricePaid || resource.price,
-        saleId: sale?._id,
+        _id: purchase._id,
+        purchaseDate: purchase.purchaseDate,
+        pricePaid: purchase.pricePaid,
+        saleId: sale._id,
         resource: {
           _id: resource._id,
           title: resource.title,

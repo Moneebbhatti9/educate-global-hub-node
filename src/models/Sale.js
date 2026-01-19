@@ -88,7 +88,6 @@ const saleSchema = new mongoose.Schema(
       type: String,
       unique: true,
       sparse: true,
-      index: true,
     },
     buyerEmail: {
       type: String,
@@ -119,7 +118,6 @@ const saleSchema = new mongoose.Schema(
 saleSchema.index({ seller: 1, saleDate: -1 });
 saleSchema.index({ seller: 1, status: 1 });
 saleSchema.index({ resource: 1, saleDate: -1 });
-saleSchema.index({ stripeChargeId: 1 }, { sparse: true });
 
 // Virtual for resource details
 saleSchema.virtual("resourceDetails", {
@@ -157,7 +155,7 @@ saleSchema.statics.calculateSellerSales = async function (sellerId, months = 12)
   const result = await this.aggregate([
     {
       $match: {
-        seller: mongoose.Types.ObjectId(sellerId),
+        seller: new mongoose.Types.ObjectId(sellerId),
         status: { $in: ["completed"] },
         saleDate: { $gte: startDate },
       },
@@ -179,7 +177,7 @@ saleSchema.statics.getSellerEarnings = async function (sellerId, currency = "GBP
   const result = await this.aggregate([
     {
       $match: {
-        seller: mongoose.Types.ObjectId(sellerId),
+        seller: new mongoose.Types.ObjectId(sellerId),
         currency: currency,
         status: { $in: ["completed"] },
       },

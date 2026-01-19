@@ -34,6 +34,8 @@ const salesRoutes = require("./routes/sales");
 const withdrawalRoutes = require("./routes/withdrawals");
 const webhookRoutes = require("./routes/webhooks");
 const reviewRoutes = require("./routes/reviews");
+const gdprRoutes = require("./routes/gdpr");
+const adminGdprRoutes = require("./routes/adminGdpr");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -172,6 +174,8 @@ app.use(`/api/${apiVersion}/forum-notifications`, forumNotificationRoutes);
 app.use(`/api/${apiVersion}/sales`, salesRoutes);
 app.use(`/api/${apiVersion}/withdrawals`, withdrawalRoutes);
 app.use(`/api/${apiVersion}/reviews`, reviewRoutes);
+app.use(`/api/${apiVersion}/gdpr`, gdprRoutes);
+app.use(`/api/${apiVersion}/admin/gdpr`, adminGdprRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
