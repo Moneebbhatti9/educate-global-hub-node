@@ -1,0 +1,388 @@
+const PlatformSettings = require("../models/PlatformSettings");
+const { successResponse, errorResponse } = require("../utils/response");
+
+// Get platform settings
+const getPlatformSettings = async (req, res) => {
+  try {
+    const settings = await PlatformSettings.getSettings();
+
+    // Format the response for frontend consumption
+    const formattedSettings = {
+      tiers: {
+        bronze: {
+          name: settings.tiers.bronze.name,
+          royaltyRate: settings.tiers.bronze.royaltyRate,
+          royaltyRatePercent: Math.round(settings.tiers.bronze.royaltyRate * 100),
+          platformFee: settings.tiers.bronze.platformFee,
+          platformFeePercent: Math.round(settings.tiers.bronze.platformFee * 100),
+          minSales: settings.tiers.bronze.minSales,
+          maxSales: settings.tiers.bronze.maxSales,
+          minSalesFormatted: `£${(settings.tiers.bronze.minSales).toLocaleString()}`,
+          maxSalesFormatted: settings.tiers.bronze.maxSales === Infinity
+            ? "Unlimited"
+            : `£${(settings.tiers.bronze.maxSales).toLocaleString()}`,
+          description: settings.tiers.bronze.description,
+        },
+        silver: {
+          name: settings.tiers.silver.name,
+          royaltyRate: settings.tiers.silver.royaltyRate,
+          royaltyRatePercent: Math.round(settings.tiers.silver.royaltyRate * 100),
+          platformFee: settings.tiers.silver.platformFee,
+          platformFeePercent: Math.round(settings.tiers.silver.platformFee * 100),
+          minSales: settings.tiers.silver.minSales,
+          maxSales: settings.tiers.silver.maxSales,
+          minSalesFormatted: `£${(settings.tiers.silver.minSales).toLocaleString()}`,
+          maxSalesFormatted: settings.tiers.silver.maxSales === Infinity
+            ? "Unlimited"
+            : `£${(settings.tiers.silver.maxSales).toLocaleString()}`,
+          description: settings.tiers.silver.description,
+        },
+        gold: {
+          name: settings.tiers.gold.name,
+          royaltyRate: settings.tiers.gold.royaltyRate,
+          royaltyRatePercent: Math.round(settings.tiers.gold.royaltyRate * 100),
+          platformFee: settings.tiers.gold.platformFee,
+          platformFeePercent: Math.round(settings.tiers.gold.platformFee * 100),
+          minSales: settings.tiers.gold.minSales,
+          maxSales: settings.tiers.gold.maxSales,
+          minSalesFormatted: `£${(settings.tiers.gold.minSales).toLocaleString()}`,
+          maxSalesFormatted: "Unlimited",
+          description: settings.tiers.gold.description,
+        },
+      },
+      vat: {
+        enabled: settings.vat.enabled,
+        rate: settings.vat.rate,
+        ratePercent: Math.round(settings.vat.rate * 100),
+        applicableCountries: settings.vat.applicableCountries,
+      },
+      minimumPayout: {
+        GBP: settings.minimumPayout.GBP,
+        GBPFormatted: `£${(settings.minimumPayout.GBP / 100).toFixed(2)}`,
+        USD: settings.minimumPayout.USD,
+        USDFormatted: `$${(settings.minimumPayout.USD / 100).toFixed(2)}`,
+        EUR: settings.minimumPayout.EUR,
+        EURFormatted: `€${(settings.minimumPayout.EUR / 100).toFixed(2)}`,
+      },
+      general: settings.general,
+      lastUpdatedAt: settings.updatedAt,
+      lastUpdatedBy: settings.lastUpdatedBy,
+    };
+
+    return successResponse(
+      res,
+      "Platform settings retrieved successfully",
+      formattedSettings
+    );
+  } catch (error) {
+    console.error("Error fetching platform settings:", error);
+    return errorResponse(res, "Failed to fetch platform settings", error);
+  }
+};
+
+// Update tier settings
+const updateTierSettings = async (req, res) => {
+  try {
+    const { tiers } = req.body;
+    const adminId = req.user._id;
+
+    if (!tiers) {
+      return errorResponse(res, "Tier settings are required", null, 400);
+    }
+
+    // Validate tier data
+    const validationErrors = [];
+
+    for (const [tierName, tierData] of Object.entries(tiers)) {
+      if (!["bronze", "silver", "gold"].includes(tierName)) {
+        validationErrors.push(`Invalid tier name: ${tierName}`);
+        continue;
+      }
+
+      if (tierData.royaltyRate !== undefined) {
+        const rate = parseFloat(tierData.royaltyRate);
+        if (isNaN(rate) || rate < 0 || rate > 1) {
+          validationErrors.push(
+            `${tierName}: Royalty rate must be between 0 and 1 (0% to 100%)`
+          );
+        }
+      }
+
+      if (tierData.minSales !== undefined) {
+        const minSales = parseFloat(tierData.minSales);
+        if (isNaN(minSales) || minSales < 0) {
+          validationErrors.push(`${tierName}: Minimum sales must be 0 or greater`);
+        }
+      }
+    }
+
+    // Validate tier thresholds don't overlap incorrectly
+    if (tiers.bronze?.maxSales !== undefined && tiers.silver?.minSales !== undefined) {
+      if (tiers.bronze.maxSales >= tiers.silver.minSales) {
+        validationErrors.push(
+          "Bronze max sales must be less than Silver min sales"
+        );
+      }
+    }
+
+    if (tiers.silver?.maxSales !== undefined && tiers.gold?.minSales !== undefined) {
+      if (tiers.silver.maxSales >= tiers.gold.minSales) {
+        validationErrors.push(
+          "Silver max sales must be less than Gold min sales"
+        );
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return errorResponse(
+        res,
+        "Validation failed",
+        { errors: validationErrors },
+        400
+      );
+    }
+
+    // Convert percentage inputs to decimals if needed
+    const processedTiers = {};
+    for (const [tierName, tierData] of Object.entries(tiers)) {
+      processedTiers[tierName] = { ...tierData };
+
+      // If royaltyRate is provided as percentage (> 1), convert to decimal
+      if (tierData.royaltyRate !== undefined) {
+        let rate = parseFloat(tierData.royaltyRate);
+        if (rate > 1) {
+          rate = rate / 100; // Convert percentage to decimal
+        }
+        processedTiers[tierName].royaltyRate = rate;
+      }
+    }
+
+    const updatedSettings = await PlatformSettings.updateSettings(
+      { tiers: processedTiers },
+      adminId
+    );
+
+    return successResponse(res, "Tier settings updated successfully", {
+      tiers: {
+        bronze: {
+          name: updatedSettings.tiers.bronze.name,
+          royaltyRate: updatedSettings.tiers.bronze.royaltyRate,
+          royaltyRatePercent: Math.round(updatedSettings.tiers.bronze.royaltyRate * 100),
+          platformFee: updatedSettings.tiers.bronze.platformFee,
+          platformFeePercent: Math.round(updatedSettings.tiers.bronze.platformFee * 100),
+          minSales: updatedSettings.tiers.bronze.minSales,
+          maxSales: updatedSettings.tiers.bronze.maxSales,
+        },
+        silver: {
+          name: updatedSettings.tiers.silver.name,
+          royaltyRate: updatedSettings.tiers.silver.royaltyRate,
+          royaltyRatePercent: Math.round(updatedSettings.tiers.silver.royaltyRate * 100),
+          platformFee: updatedSettings.tiers.silver.platformFee,
+          platformFeePercent: Math.round(updatedSettings.tiers.silver.platformFee * 100),
+          minSales: updatedSettings.tiers.silver.minSales,
+          maxSales: updatedSettings.tiers.silver.maxSales,
+        },
+        gold: {
+          name: updatedSettings.tiers.gold.name,
+          royaltyRate: updatedSettings.tiers.gold.royaltyRate,
+          royaltyRatePercent: Math.round(updatedSettings.tiers.gold.royaltyRate * 100),
+          platformFee: updatedSettings.tiers.gold.platformFee,
+          platformFeePercent: Math.round(updatedSettings.tiers.gold.platformFee * 100),
+          minSales: updatedSettings.tiers.gold.minSales,
+          maxSales: updatedSettings.tiers.gold.maxSales,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error updating tier settings:", error);
+    return errorResponse(res, "Failed to update tier settings", error);
+  }
+};
+
+// Update VAT settings
+const updateVatSettings = async (req, res) => {
+  try {
+    const { vat } = req.body;
+    const adminId = req.user._id;
+
+    if (!vat) {
+      return errorResponse(res, "VAT settings are required", null, 400);
+    }
+
+    // Validate VAT rate
+    if (vat.rate !== undefined) {
+      let rate = parseFloat(vat.rate);
+      if (rate > 1) {
+        rate = rate / 100; // Convert percentage to decimal
+      }
+      if (isNaN(rate) || rate < 0 || rate > 1) {
+        return errorResponse(
+          res,
+          "VAT rate must be between 0 and 100%",
+          null,
+          400
+        );
+      }
+      vat.rate = rate;
+    }
+
+    const updatedSettings = await PlatformSettings.updateSettings(
+      { vat },
+      adminId
+    );
+
+    return successResponse(res, "VAT settings updated successfully", {
+      vat: {
+        enabled: updatedSettings.vat.enabled,
+        rate: updatedSettings.vat.rate,
+        ratePercent: Math.round(updatedSettings.vat.rate * 100),
+        applicableCountries: updatedSettings.vat.applicableCountries,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating VAT settings:", error);
+    return errorResponse(res, "Failed to update VAT settings", error);
+  }
+};
+
+// Update minimum payout thresholds
+const updateMinimumPayout = async (req, res) => {
+  try {
+    const { minimumPayout } = req.body;
+    const adminId = req.user._id;
+
+    if (!minimumPayout) {
+      return errorResponse(
+        res,
+        "Minimum payout settings are required",
+        null,
+        400
+      );
+    }
+
+    // Validate amounts (should be in smallest currency unit - pence/cents)
+    for (const [currency, amount] of Object.entries(minimumPayout)) {
+      if (!["GBP", "USD", "EUR"].includes(currency)) {
+        return errorResponse(res, `Invalid currency: ${currency}`, null, 400);
+      }
+      if (isNaN(amount) || amount < 0) {
+        return errorResponse(
+          res,
+          `${currency}: Amount must be a positive number`,
+          null,
+          400
+        );
+      }
+    }
+
+    const updatedSettings = await PlatformSettings.updateSettings(
+      { minimumPayout },
+      adminId
+    );
+
+    return successResponse(res, "Minimum payout thresholds updated successfully", {
+      minimumPayout: {
+        GBP: updatedSettings.minimumPayout.GBP,
+        GBPFormatted: `£${(updatedSettings.minimumPayout.GBP / 100).toFixed(2)}`,
+        USD: updatedSettings.minimumPayout.USD,
+        USDFormatted: `$${(updatedSettings.minimumPayout.USD / 100).toFixed(2)}`,
+        EUR: updatedSettings.minimumPayout.EUR,
+        EURFormatted: `€${(updatedSettings.minimumPayout.EUR / 100).toFixed(2)}`,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating minimum payout:", error);
+    return errorResponse(res, "Failed to update minimum payout settings", error);
+  }
+};
+
+// Update all platform settings at once
+const updateAllSettings = async (req, res) => {
+  try {
+    const { tiers, vat, minimumPayout, general } = req.body;
+    const adminId = req.user._id;
+
+    const updates = {};
+
+    // Process tier updates
+    if (tiers) {
+      updates.tiers = {};
+      for (const [tierName, tierData] of Object.entries(tiers)) {
+        if (["bronze", "silver", "gold"].includes(tierName)) {
+          updates.tiers[tierName] = { ...tierData };
+          if (tierData.royaltyRate !== undefined) {
+            let rate = parseFloat(tierData.royaltyRate);
+            if (rate > 1) rate = rate / 100;
+            updates.tiers[tierName].royaltyRate = rate;
+          }
+        }
+      }
+    }
+
+    // Process VAT updates
+    if (vat) {
+      updates.vat = { ...vat };
+      if (vat.rate !== undefined) {
+        let rate = parseFloat(vat.rate);
+        if (rate > 1) rate = rate / 100;
+        updates.vat.rate = rate;
+      }
+    }
+
+    // Process minimum payout updates
+    if (minimumPayout) {
+      updates.minimumPayout = minimumPayout;
+    }
+
+    // Process general settings
+    if (general) {
+      updates.general = general;
+    }
+
+    const updatedSettings = await PlatformSettings.updateSettings(
+      updates,
+      adminId
+    );
+
+    return successResponse(
+      res,
+      "Platform settings updated successfully",
+      updatedSettings
+    );
+  } catch (error) {
+    console.error("Error updating platform settings:", error);
+    return errorResponse(res, "Failed to update platform settings", error);
+  }
+};
+
+// Get tier rate for a specific tier (used by sales calculations)
+const getTierRate = async (req, res) => {
+  try {
+    const { tierName } = req.params;
+
+    if (!tierName || !["bronze", "silver", "gold"].includes(tierName.toLowerCase())) {
+      return errorResponse(res, "Invalid tier name", null, 400);
+    }
+
+    const rates = await PlatformSettings.getTierRate(tierName);
+
+    return successResponse(res, "Tier rate retrieved", {
+      tier: tierName,
+      ...rates,
+      royaltyRatePercent: Math.round(rates.royaltyRate * 100),
+      platformFeePercent: Math.round(rates.platformFee * 100),
+    });
+  } catch (error) {
+    console.error("Error fetching tier rate:", error);
+    return errorResponse(res, "Failed to fetch tier rate", error);
+  }
+};
+
+module.exports = {
+  getPlatformSettings,
+  updateTierSettings,
+  updateVatSettings,
+  updateMinimumPayout,
+  updateAllSettings,
+  getTierRate,
+};
