@@ -37,6 +37,7 @@ const reviewRoutes = require("./routes/reviews");
 const gdprRoutes = require("./routes/gdpr");
 const adminGdprRoutes = require("./routes/adminGdpr");
 const adminSettingsRoutes = require("./routes/adminSettings");
+const dropdownRoutes = require("./routes/dropdowns");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -166,7 +167,7 @@ app.use(`/api/${apiVersion}/notifications`, notificationRoutes);
 app.use(`/api/${apiVersion}/admin`, adminRoutes);
 app.use(`/api/${apiVersion}/teacherDashboard`, teacherDashboardRoutes);
 app.use(`/api/${apiVersion}/schoolDashboard`, schoolDashboardRoutes);
-app.use(`/api/${apiVersion}/adminDashboard`, adminDashboardRoutes);
+app.use(`/api/${apiVersion}/admin-dashboard`, adminDashboardRoutes);
 app.use(`/api/${apiVersion}/discussion`, discussionRoutes);
 app.use(`/api/${apiVersion}/reply`, replyRoutes);
 app.use(`/api/${apiVersion}/adminForum`, adminForumRoutes);
@@ -178,6 +179,7 @@ app.use(`/api/${apiVersion}/reviews`, reviewRoutes);
 app.use(`/api/${apiVersion}/gdpr`, gdprRoutes);
 app.use(`/api/${apiVersion}/admin/gdpr`, adminGdprRoutes);
 app.use(`/api/${apiVersion}/admin/settings`, adminSettingsRoutes);
+app.use(`/api/${apiVersion}/dropdowns`, dropdownRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

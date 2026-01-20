@@ -1,5 +1,7 @@
 const PlatformSettings = require("../models/PlatformSettings");
+const GeneralSettings = require("../models/GeneralSettings");
 const { successResponse, errorResponse } = require("../utils/response");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 
 // Get platform settings
 const getPlatformSettings = async (req, res) => {
@@ -378,6 +380,95 @@ const getTierRate = async (req, res) => {
   }
 };
 
+// ==================== General Settings ====================
+
+// Get general settings (public endpoint for logo, site name, etc.)
+const getGeneralSettings = async (req, res) => {
+  try {
+    const settings = await GeneralSettings.getSettings();
+
+    return successResponse(res, "General settings retrieved successfully", {
+      siteName: settings.siteName,
+      siteDescription: settings.siteDescription,
+      logo: settings.logo,
+      favicon: settings.favicon,
+      contactEmail: settings.contactEmail,
+      supportEmail: settings.supportEmail,
+      phoneNumber: settings.phoneNumber,
+      address: settings.address,
+      socialLinks: settings.socialLinks,
+      copyrightText: settings.copyrightText,
+      updatedAt: settings.updatedAt,
+    });
+  } catch (error) {
+    console.error("Error fetching general settings:", error);
+    return errorResponse(res, "Failed to fetch general settings", error);
+  }
+};
+
+// Update general settings (admin only)
+const updateGeneralSettings = async (req, res) => {
+  try {
+    const adminId = req.user._id;
+    const updates = { ...req.body };
+
+    // Handle file uploads
+    if (req.files) {
+      // Handle logo upload
+      if (req.files.logo && req.files.logo[0]) {
+        const logoFile = req.files.logo[0];
+        const logoResult = await uploadToCloudinary(logoFile.buffer, {
+          folder: "site-assets",
+          public_id: "site-logo",
+          overwrite: true,
+          resource_type: "image",
+        });
+        updates.logo = logoResult.secure_url;
+      }
+
+      // Handle favicon upload
+      if (req.files.favicon && req.files.favicon[0]) {
+        const faviconFile = req.files.favicon[0];
+        const faviconResult = await uploadToCloudinary(faviconFile.buffer, {
+          folder: "site-assets",
+          public_id: "site-favicon",
+          overwrite: true,
+          resource_type: "image",
+        });
+        updates.favicon = faviconResult.secure_url;
+      }
+    }
+
+    // Parse socialLinks if it's a string
+    if (updates.socialLinks && typeof updates.socialLinks === "string") {
+      try {
+        updates.socialLinks = JSON.parse(updates.socialLinks);
+      } catch (e) {
+        console.error("Failed to parse socialLinks:", e);
+      }
+    }
+
+    const updatedSettings = await GeneralSettings.updateSettings(updates, adminId);
+
+    return successResponse(res, "General settings updated successfully", {
+      siteName: updatedSettings.siteName,
+      siteDescription: updatedSettings.siteDescription,
+      logo: updatedSettings.logo,
+      favicon: updatedSettings.favicon,
+      contactEmail: updatedSettings.contactEmail,
+      supportEmail: updatedSettings.supportEmail,
+      phoneNumber: updatedSettings.phoneNumber,
+      address: updatedSettings.address,
+      socialLinks: updatedSettings.socialLinks,
+      copyrightText: updatedSettings.copyrightText,
+      updatedAt: updatedSettings.updatedAt,
+    });
+  } catch (error) {
+    console.error("Error updating general settings:", error);
+    return errorResponse(res, "Failed to update general settings", error);
+  }
+};
+
 module.exports = {
   getPlatformSettings,
   updateTierSettings,
@@ -385,4 +476,6 @@ module.exports = {
   updateMinimumPayout,
   updateAllSettings,
   getTierRate,
+  getGeneralSettings,
+  updateGeneralSettings,
 };
