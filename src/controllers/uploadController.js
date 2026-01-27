@@ -55,9 +55,29 @@ const uploadDocument = async (req, res, next) => {
     const base64File = req.file.buffer.toString("base64");
     const dataURI = `data:${req.file.mimetype};base64,${base64File}`;
 
+    // Determine the best resource_type based on file mime type
+    // Use 'raw' for documents to avoid transformation issues
+    const isDocument = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/zip',
+      'application/x-zip-compressed',
+    ].includes(req.file.mimetype);
+
+    const resourceType = isDocument ? 'raw' : 'auto';
+
     const result = await cloudinary.uploader.upload(dataURI, {
       folder: "documents",
-      resource_type: "auto",
+      resource_type: resourceType,
+      // Use 'upload' type for public access (not 'authenticated' or 'private')
+      type: "upload",
+      // Allow public access
+      access_mode: "public",
     });
 
     return successResponse(
@@ -65,6 +85,7 @@ const uploadDocument = async (req, res, next) => {
       {
         documentUrl: result.secure_url,
         publicId: result.public_id,
+        resourceType: result.resource_type,
       },
       "Document uploaded successfully"
     );

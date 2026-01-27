@@ -102,20 +102,43 @@ sellerTierSchema.set("toJSON", { virtuals: true });
 sellerTierSchema.set("toObject", { virtuals: true });
 
 // Instance method to determine tier based on sales
-sellerTierSchema.methods.calculateTier = function (salesAmount) {
-  if (salesAmount >= this.tierThresholds.gold.min) {
-    return { tier: "Gold", rate: 0.8 };
-  } else if (salesAmount >= this.tierThresholds.silver.min) {
-    return { tier: "Silver", rate: 0.7 };
-  } else {
-    return { tier: "Bronze", rate: 0.6 };
+// Now uses PlatformSettings for dynamic rates
+// IMPORTANT: salesAmount is expected in CENTS (smallest currency unit)
+// PlatformSettings thresholds are in POUNDS (major currency unit)
+sellerTierSchema.methods.calculateTier = async function (salesAmount) {
+  const PlatformSettings = require("./PlatformSettings");
+
+  // Convert salesAmount from cents to pounds for comparison
+  // since tier thresholds are defined in pounds (e.g., 1000 = £1,000)
+  const salesInPounds = salesAmount / 100;
+
+  try {
+    const settings = await PlatformSettings.getSettings();
+
+    if (salesInPounds >= settings.tiers.gold.minSales) {
+      return { tier: "Gold", rate: settings.tiers.gold.royaltyRate };
+    } else if (salesInPounds >= settings.tiers.silver.minSales) {
+      return { tier: "Silver", rate: settings.tiers.silver.royaltyRate };
+    } else {
+      return { tier: "Bronze", rate: settings.tiers.bronze.royaltyRate };
+    }
+  } catch (error) {
+    // Fallback to defaults if settings unavailable
+    console.error("Error fetching platform settings, using defaults:", error);
+    if (salesInPounds >= 6000) {
+      return { tier: "Gold", rate: 0.8 };
+    } else if (salesInPounds >= 1000) {
+      return { tier: "Silver", rate: 0.7 };
+    } else {
+      return { tier: "Bronze", rate: 0.6 };
+    }
   }
 };
 
 // Instance method to update tier
 sellerTierSchema.methods.updateTier = async function (newSalesAmount) {
   const previousTier = this.currentTier;
-  const { tier, rate } = this.calculateTier(newSalesAmount);
+  const { tier, rate } = await this.calculateTier(newSalesAmount);
 
   this.last12MonthsSales = newSalesAmount;
   this.currentTier = tier;
@@ -186,13 +209,23 @@ sellerTierSchema.statics.updateAllTiers = async function () {
 
 // Static method to get or create tier for seller
 sellerTierSchema.statics.getOrCreateTier = async function (sellerId) {
+  const PlatformSettings = require("./PlatformSettings");
   let tierDoc = await this.findOne({ seller: sellerId });
 
   if (!tierDoc) {
+    // Get dynamic bronze rate from platform settings
+    let bronzeRate = 0.6;
+    try {
+      const settings = await PlatformSettings.getSettings();
+      bronzeRate = settings.tiers.bronze.royaltyRate;
+    } catch (error) {
+      console.error("Error fetching platform settings for new tier:", error);
+    }
+
     tierDoc = await this.create({
       seller: sellerId,
       currentTier: "Bronze",
-      royaltyRate: 0.6,
+      royaltyRate: bronzeRate,
       last12MonthsSales: 0,
       last12MonthsCount: 0,
       tierHistory: [

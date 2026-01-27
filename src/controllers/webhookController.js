@@ -6,9 +6,12 @@ const User = require("../models/User");
 const SellerTier = require("../models/SellerTier");
 const Resource = require("../models/resource");
 const ResourcePurchase = require("../models/resourcePurchase");
+const PlatformSettings = require("../models/PlatformSettings");
+const JobNotification = require("../models/JobNotification");
 const { verifyWebhookSignature } = require("../config/stripe");
 const { successResponse, errorResponse } = require("../utils/response");
 const emailService = require("../config/email");
+const invoiceService = require("../services/invoiceService");
 
 /**
  * Stripe Webhook Controller
@@ -155,10 +158,12 @@ async function handleCheckoutSessionCompleted(session) {
     );
 
     // Create resource purchase record
+    // Store pricePaid in cents (smallest currency unit) for consistency with Sale.price
     const purchase = await ResourcePurchase.create({
       resourceId: new mongoose.Types.ObjectId(resourceId),
       buyerId: new mongoose.Types.ObjectId(buyerId),
-      pricePaid: amount / 100, // Convert to major unit
+      pricePaid: amount, // Keep in cents for consistency with Sale.price
+      currency: currency,
       status: "completed",
     });
 
@@ -215,6 +220,31 @@ async function handleCheckoutSessionCompleted(session) {
 
     console.log(`✅ Sale created for session ${session.id}: Sale ID ${sale._id}`);
 
+    // Generate invoice
+    try {
+      const settings = await PlatformSettings.getSettings();
+      if (settings.vat.invoiceSettings.autoGenerate) {
+        // Get buyer info for invoice
+        const buyer = await User.findById(buyerId);
+        const isBusinessBuyer = buyer?.role === "school" || buyer?.role === "recruiter" || buyer?.role === "supplier";
+
+        const buyerDetails = {
+          name: buyer ? `${buyer.firstName} ${buyer.lastName}` : "Guest",
+          email: buyerEmail || session.customer_email || buyer?.email,
+          address: { country: buyerCountry || "GB" },
+          isBusinessBuyer,
+          // For schools, get company name and VAT number from profile
+          companyName: isBusinessBuyer && buyer?.schoolProfile ? buyer.schoolProfile.schoolName : null,
+          vatNumber: isBusinessBuyer && buyer?.schoolProfile ? buyer.schoolProfile.vatNumber : null,
+        };
+
+        await invoiceService.generateInvoice(sale._id, buyerDetails);
+        console.log(`✅ Invoice generated for sale ${sale._id}`);
+      }
+    } catch (invoiceError) {
+      console.error("Failed to generate invoice:", invoiceError);
+    }
+
     // Send email notifications (optional)
     try {
       const seller = await User.findById(sellerId);
@@ -228,6 +258,32 @@ async function handleCheckoutSessionCompleted(session) {
       }
     } catch (emailError) {
       console.error("Failed to send sale notification email:", emailError);
+    }
+
+    // Create in-app notification for seller
+    try {
+      const { formatCurrency } = require("../utils/royaltyCalculator");
+      const notification = await JobNotification.createNotification({
+        userId: sellerId,
+        type: "system_alert",
+        category: "system",
+        priority: "high",
+        title: "Resource Sold!",
+        message: `Your resource "${resource.title}" was purchased for ${formatCurrency(royaltyCalc.sellerEarnings, currency)}`,
+        actionUrl: `/teacher/resources/${resourceId}`,
+        actionText: "View Resource",
+        metadata: {
+          saleId: sale._id.toString(),
+          resourceId: resourceId,
+          resourceTitle: resource.title,
+          amount: royaltyCalc.sellerEarnings,
+          currency: currency,
+        },
+      });
+
+      console.log(`✅ Sale notification created for seller ${sellerId}`);
+    } catch (notificationError) {
+      console.error("Failed to create sale notification:", notificationError);
     }
   } catch (error) {
     console.error("Error handling checkout session completed:", error);
