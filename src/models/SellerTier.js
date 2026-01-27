@@ -103,14 +103,21 @@ sellerTierSchema.set("toObject", { virtuals: true });
 
 // Instance method to determine tier based on sales
 // Now uses PlatformSettings for dynamic rates
+// IMPORTANT: salesAmount is expected in CENTS (smallest currency unit)
+// PlatformSettings thresholds are in POUNDS (major currency unit)
 sellerTierSchema.methods.calculateTier = async function (salesAmount) {
   const PlatformSettings = require("./PlatformSettings");
+
+  // Convert salesAmount from cents to pounds for comparison
+  // since tier thresholds are defined in pounds (e.g., 1000 = £1,000)
+  const salesInPounds = salesAmount / 100;
+
   try {
     const settings = await PlatformSettings.getSettings();
 
-    if (salesAmount >= settings.tiers.gold.minSales) {
+    if (salesInPounds >= settings.tiers.gold.minSales) {
       return { tier: "Gold", rate: settings.tiers.gold.royaltyRate };
-    } else if (salesAmount >= settings.tiers.silver.minSales) {
+    } else if (salesInPounds >= settings.tiers.silver.minSales) {
       return { tier: "Silver", rate: settings.tiers.silver.royaltyRate };
     } else {
       return { tier: "Bronze", rate: settings.tiers.bronze.royaltyRate };
@@ -118,9 +125,9 @@ sellerTierSchema.methods.calculateTier = async function (salesAmount) {
   } catch (error) {
     // Fallback to defaults if settings unavailable
     console.error("Error fetching platform settings, using defaults:", error);
-    if (salesAmount >= 6000) {
+    if (salesInPounds >= 6000) {
       return { tier: "Gold", rate: 0.8 };
-    } else if (salesAmount >= 1000) {
+    } else if (salesInPounds >= 1000) {
       return { tier: "Silver", rate: 0.7 };
     } else {
       return { tier: "Bronze", rate: 0.6 };

@@ -485,10 +485,12 @@ async function getPurchaseBySession(req, res, next) {
         // Create purchase record if it doesn't exist
         if (!purchase) {
           try {
+            // Store pricePaid in cents (smallest currency unit) for consistency with Sale.price
             purchase = await ResourcePurchase.create({
               resourceId: new mongoose.Types.ObjectId(resourceId),
               buyerId: new mongoose.Types.ObjectId(buyerId),
-              pricePaid: amount / 100, // Convert to major unit
+              pricePaid: amount, // Keep in cents for consistency
+              currency: currency,
               status: "completed",
             });
             console.log(`Created ResourcePurchase: ${purchase._id}`);
@@ -726,12 +728,15 @@ async function getEarningsDashboard(req, res, next) {
     });
 
     // Calculate tier progress using dynamic platform settings
-    const currentSales = tier.last12MonthsSales;
-    let nextTierThreshold = null;
+    // NOTE: tier.last12MonthsSales is in CENTS (smallest currency unit)
+    // Platform settings thresholds are in POUNDS (major currency unit)
+    const currentSalesInCents = tier.last12MonthsSales;
+    const currentSalesInPounds = currentSalesInCents / 100; // Convert to pounds for comparison
+    let nextTierThreshold = null; // Will be in POUNDS
     let progressToNextTier = 0;
     let nextTierRate = null;
 
-    // Get dynamic tier thresholds from platform settings
+    // Get dynamic tier thresholds from platform settings (thresholds are in POUNDS)
     let platformSettings;
     try {
       platformSettings = await PlatformSettings.getSettings();
@@ -740,18 +745,18 @@ async function getEarningsDashboard(req, res, next) {
       platformSettings = null;
     }
 
-    const silverThreshold = platformSettings?.tiers?.silver?.minSales || 1000;
-    const goldThreshold = platformSettings?.tiers?.gold?.minSales || 6000;
+    const silverThreshold = platformSettings?.tiers?.silver?.minSales || 1000; // in pounds
+    const goldThreshold = platformSettings?.tiers?.gold?.minSales || 6000; // in pounds
     const silverRate = platformSettings?.tiers?.silver?.royaltyRate || 0.7;
     const goldRate = platformSettings?.tiers?.gold?.royaltyRate || 0.8;
 
     if (tier.currentTier === "Bronze") {
       nextTierThreshold = silverThreshold;
-      progressToNextTier = (currentSales / silverThreshold) * 100;
+      progressToNextTier = (currentSalesInPounds / silverThreshold) * 100;
       nextTierRate = silverRate;
     } else if (tier.currentTier === "Silver") {
       nextTierThreshold = goldThreshold;
-      progressToNextTier = (currentSales / goldThreshold) * 100;
+      progressToNextTier = (currentSalesInPounds / goldThreshold) * 100;
       nextTierRate = goldRate;
     }
 
@@ -774,24 +779,25 @@ async function getEarningsDashboard(req, res, next) {
         current: tier.currentTier,
         rate: tier.royaltyRate,
         ratePercentage: `${(tier.royaltyRate * 100).toFixed(0)}%`,
-        last12MonthsSales: tier.last12MonthsSales,
-        last12MonthsSalesFormatted: formatCurrency(
-          tier.last12MonthsSales * 100,
-          "GBP"
-        ),
+        last12MonthsSales: tier.last12MonthsSales, // in cents
+        last12MonthsSalesInPounds: currentSalesInPounds, // in pounds for display
+        // formatCurrency expects CENTS, so pass the cents value directly
+        last12MonthsSalesFormatted: formatCurrency(currentSalesInCents, "GBP"),
         nextTier:
           tier.currentTier === "Gold"
             ? null
             : tier.currentTier === "Silver"
             ? "Gold"
             : "Silver",
-        nextTierThreshold,
+        nextTierThreshold, // in pounds
+        // Convert threshold to cents for formatCurrency (which expects cents)
         nextTierThresholdFormatted: nextTierThreshold ? formatCurrency(nextTierThreshold * 100, "GBP") : null,
         nextTierRate,
         nextTierRatePercentage: nextTierRate ? `${(nextTierRate * 100).toFixed(0)}%` : null,
         progressToNextTier: Math.min(progressToNextTier, 100).toFixed(1),
-        remainingToNextTier: nextTierThreshold ? Math.max(0, nextTierThreshold - currentSales) : null,
-        remainingToNextTierFormatted: nextTierThreshold ? formatCurrency(Math.max(0, (nextTierThreshold - currentSales) * 100), "GBP") : null,
+        remainingToNextTier: nextTierThreshold ? Math.max(0, nextTierThreshold - currentSalesInPounds) : null, // in pounds
+        // Convert remaining (in pounds) to cents for formatCurrency
+        remainingToNextTierFormatted: nextTierThreshold ? formatCurrency(Math.max(0, (nextTierThreshold - currentSalesInPounds) * 100), "GBP") : null,
       },
       stats: {
         totalSales,

@@ -56,7 +56,28 @@ const getPlatformSettings = async (req, res) => {
         enabled: settings.vat.enabled,
         rate: settings.vat.rate,
         ratePercent: Math.round(settings.vat.rate * 100),
+        pricingType: settings.vat.pricingType || "inclusive",
+        applicableRegions: settings.vat.applicableRegions || ["UK", "EU"],
         applicableCountries: settings.vat.applicableCountries,
+        euRates: settings.vat.euRates ? Object.fromEntries(
+          Array.from(settings.vat.euRates.entries()).map(([key, value]) => [
+            key,
+            { rate: value, ratePercent: Math.round(value * 100) }
+          ])
+        ) : {},
+        b2bReverseCharge: settings.vat.b2bReverseCharge || {
+          enabled: true,
+          requireVatNumber: true,
+          validateVatNumber: true,
+        },
+        invoiceSettings: settings.vat.invoiceSettings || {
+          autoGenerate: true,
+          sendToEmail: true,
+          companyName: "Educate Link Ltd",
+          companyAddress: "",
+          vatNumber: "",
+          invoicePrefix: "INV",
+        },
       },
       minimumPayout: {
         GBP: settings.minimumPayout.GBP,
@@ -73,8 +94,8 @@ const getPlatformSettings = async (req, res) => {
 
     return successResponse(
       res,
-      "Platform settings retrieved successfully",
-      formattedSettings
+      formattedSettings,
+      "Platform settings retrieved successfully"
     );
   } catch (error) {
     console.error("Error fetching platform settings:", error);
@@ -164,7 +185,7 @@ const updateTierSettings = async (req, res) => {
       adminId
     );
 
-    return successResponse(res, "Tier settings updated successfully", {
+    return successResponse(res, {
       tiers: {
         bronze: {
           name: updatedSettings.tiers.bronze.name,
@@ -194,7 +215,7 @@ const updateTierSettings = async (req, res) => {
           maxSales: updatedSettings.tiers.gold.maxSales,
         },
       },
-    });
+    }, "Tier settings updated successfully");
   } catch (error) {
     console.error("Error updating tier settings:", error);
     return errorResponse(res, "Failed to update tier settings", error);
@@ -211,7 +232,7 @@ const updateVatSettings = async (req, res) => {
       return errorResponse(res, "VAT settings are required", null, 400);
     }
 
-    // Validate VAT rate
+    // Validate and convert VAT rate
     if (vat.rate !== undefined) {
       let rate = parseFloat(vat.rate);
       if (rate > 1) {
@@ -228,19 +249,55 @@ const updateVatSettings = async (req, res) => {
       vat.rate = rate;
     }
 
+    // Process EU rates if provided
+    if (vat.euRates) {
+      const processedEuRates = {};
+      for (const [country, rate] of Object.entries(vat.euRates)) {
+        let processedRate = parseFloat(rate);
+        if (processedRate > 1) {
+          processedRate = processedRate / 100;
+        }
+        processedEuRates[country] = processedRate;
+      }
+      vat.euRates = processedEuRates;
+    }
+
     const updatedSettings = await PlatformSettings.updateSettings(
       { vat },
       adminId
     );
 
-    return successResponse(res, "VAT settings updated successfully", {
+    // Format EU rates for response
+    const formattedEuRates = {};
+    if (updatedSettings.vat.euRates) {
+      for (const [key, value] of updatedSettings.vat.euRates.entries()) {
+        formattedEuRates[key] = {
+          rate: value,
+          ratePercent: Math.round(value * 100),
+        };
+      }
+    }
+
+    return successResponse(res, {
       vat: {
         enabled: updatedSettings.vat.enabled,
         rate: updatedSettings.vat.rate,
         ratePercent: Math.round(updatedSettings.vat.rate * 100),
+        pricingType: updatedSettings.vat.pricingType,
+        applicableRegions: updatedSettings.vat.applicableRegions,
         applicableCountries: updatedSettings.vat.applicableCountries,
+        euRates: formattedEuRates,
+        b2bReverseCharge: updatedSettings.vat.b2bReverseCharge,
+        invoiceSettings: {
+          autoGenerate: updatedSettings.vat.invoiceSettings.autoGenerate,
+          sendToEmail: updatedSettings.vat.invoiceSettings.sendToEmail,
+          companyName: updatedSettings.vat.invoiceSettings.companyName,
+          companyAddress: updatedSettings.vat.invoiceSettings.companyAddress,
+          vatNumber: updatedSettings.vat.invoiceSettings.vatNumber,
+          invoicePrefix: updatedSettings.vat.invoiceSettings.invoicePrefix,
+        },
       },
-    });
+    }, "VAT settings updated successfully");
   } catch (error) {
     console.error("Error updating VAT settings:", error);
     return errorResponse(res, "Failed to update VAT settings", error);
@@ -282,7 +339,7 @@ const updateMinimumPayout = async (req, res) => {
       adminId
     );
 
-    return successResponse(res, "Minimum payout thresholds updated successfully", {
+    return successResponse(res, {
       minimumPayout: {
         GBP: updatedSettings.minimumPayout.GBP,
         GBPFormatted: `£${(updatedSettings.minimumPayout.GBP / 100).toFixed(2)}`,
@@ -291,7 +348,7 @@ const updateMinimumPayout = async (req, res) => {
         EUR: updatedSettings.minimumPayout.EUR,
         EURFormatted: `€${(updatedSettings.minimumPayout.EUR / 100).toFixed(2)}`,
       },
-    });
+    }, "Minimum payout thresholds updated successfully");
   } catch (error) {
     console.error("Error updating minimum payout:", error);
     return errorResponse(res, "Failed to update minimum payout settings", error);
@@ -348,8 +405,8 @@ const updateAllSettings = async (req, res) => {
 
     return successResponse(
       res,
-      "Platform settings updated successfully",
-      updatedSettings
+      updatedSettings,
+      "Platform settings updated successfully"
     );
   } catch (error) {
     console.error("Error updating platform settings:", error);
@@ -368,12 +425,12 @@ const getTierRate = async (req, res) => {
 
     const rates = await PlatformSettings.getTierRate(tierName);
 
-    return successResponse(res, "Tier rate retrieved", {
+    return successResponse(res, {
       tier: tierName,
       ...rates,
       royaltyRatePercent: Math.round(rates.royaltyRate * 100),
       platformFeePercent: Math.round(rates.platformFee * 100),
-    });
+    }, "Tier rate retrieved");
   } catch (error) {
     console.error("Error fetching tier rate:", error);
     return errorResponse(res, "Failed to fetch tier rate", error);
@@ -387,7 +444,7 @@ const getGeneralSettings = async (req, res) => {
   try {
     const settings = await GeneralSettings.getSettings();
 
-    return successResponse(res, "General settings retrieved successfully", {
+    return successResponse(res, {
       siteName: settings.siteName,
       siteDescription: settings.siteDescription,
       logo: settings.logo,
@@ -399,7 +456,7 @@ const getGeneralSettings = async (req, res) => {
       socialLinks: settings.socialLinks,
       copyrightText: settings.copyrightText,
       updatedAt: settings.updatedAt,
-    });
+    }, "General settings retrieved successfully");
   } catch (error) {
     console.error("Error fetching general settings:", error);
     return errorResponse(res, "Failed to fetch general settings", error);
@@ -450,7 +507,7 @@ const updateGeneralSettings = async (req, res) => {
 
     const updatedSettings = await GeneralSettings.updateSettings(updates, adminId);
 
-    return successResponse(res, "General settings updated successfully", {
+    return successResponse(res, {
       siteName: updatedSettings.siteName,
       siteDescription: updatedSettings.siteDescription,
       logo: updatedSettings.logo,
@@ -462,7 +519,7 @@ const updateGeneralSettings = async (req, res) => {
       socialLinks: updatedSettings.socialLinks,
       copyrightText: updatedSettings.copyrightText,
       updatedAt: updatedSettings.updatedAt,
-    });
+    }, "General settings updated successfully");
   } catch (error) {
     console.error("Error updating general settings:", error);
     return errorResponse(res, "Failed to update general settings", error);

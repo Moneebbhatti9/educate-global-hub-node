@@ -86,7 +86,7 @@ exports.toggleLikeDiscussion = async (req, res) => {
       discussion.likes.push(userId);
 
       // Create notification for post owner (LinkedIn-style)
-      await createNotification({
+      const notification = await createNotification({
         recipient: discussion.createdBy._id,
         sender: userId,
         type: "like",
@@ -94,13 +94,10 @@ exports.toggleLikeDiscussion = async (req, res) => {
         message: `liked your post "${discussion.title}"`,
       });
 
-      // Emit real-time event via Socket.IO
+      // Emit real-time event via Socket.IO with full notification object
       const io = req.app.get("io");
-      if (io) {
-        io.to(`user:${discussion.createdBy._id}`).emit("notification:new", {
-          type: "like",
-          message: `Someone liked your post "${discussion.title}"`,
-        });
+      if (io && notification) {
+        io.to(`user:${discussion.createdBy._id}`).emit("notification:new", notification);
       }
     }
 

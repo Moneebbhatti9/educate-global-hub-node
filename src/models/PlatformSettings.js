@@ -80,10 +80,71 @@ const platformSettingsSchema = new mongoose.Schema(
     // VAT settings
     vat: {
       enabled: { type: Boolean, default: true },
-      rate: { type: Number, default: 0.2, comment: "20% VAT rate" },
+      rate: { type: Number, default: 0.2, comment: "Default 20% VAT rate" },
+      pricingType: {
+        type: String,
+        enum: ["inclusive", "exclusive"],
+        default: "inclusive",
+        comment: "Whether prices include VAT or VAT is added on top",
+      },
+      applicableRegions: {
+        type: [String],
+        default: ["UK", "EU"],
+        comment: "Regions where VAT applies (UK, EU, or specific country codes)",
+      },
       applicableCountries: {
         type: [String],
         default: ["GB", "UK"],
+      },
+      // EU country-specific VAT rates
+      euRates: {
+        type: Map,
+        of: Number,
+        default: {
+          DE: 0.19, // Germany - 19%
+          FR: 0.20, // France - 20%
+          ES: 0.21, // Spain - 21%
+          IT: 0.22, // Italy - 22%
+          NL: 0.21, // Netherlands - 21%
+          BE: 0.21, // Belgium - 21%
+          AT: 0.20, // Austria - 20%
+          IE: 0.23, // Ireland - 23%
+          PT: 0.23, // Portugal - 23%
+          PL: 0.23, // Poland - 23%
+          SE: 0.25, // Sweden - 25%
+          DK: 0.25, // Denmark - 25%
+          FI: 0.24, // Finland - 24%
+          GR: 0.24, // Greece - 24%
+          CZ: 0.21, // Czech Republic - 21%
+          RO: 0.19, // Romania - 19%
+          HU: 0.27, // Hungary - 27%
+          SK: 0.20, // Slovakia - 20%
+          BG: 0.20, // Bulgaria - 20%
+          HR: 0.25, // Croatia - 25%
+          SI: 0.22, // Slovenia - 22%
+          LT: 0.21, // Lithuania - 21%
+          LV: 0.21, // Latvia - 21%
+          EE: 0.20, // Estonia - 20%
+          CY: 0.19, // Cyprus - 19%
+          LU: 0.17, // Luxembourg - 17%
+          MT: 0.18, // Malta - 18%
+        },
+      },
+      // B2B reverse charge settings
+      b2bReverseCharge: {
+        enabled: { type: Boolean, default: true },
+        requireVatNumber: { type: Boolean, default: true },
+        validateVatNumber: { type: Boolean, default: true },
+      },
+      // Invoice settings
+      invoiceSettings: {
+        autoGenerate: { type: Boolean, default: true },
+        sendToEmail: { type: Boolean, default: true },
+        companyName: { type: String, default: "Educate Link Ltd" },
+        companyAddress: { type: String, default: "" },
+        vatNumber: { type: String, default: "" },
+        invoicePrefix: { type: String, default: "INV" },
+        nextInvoiceNumber: { type: Number, default: 1001 },
       },
     },
     // Minimum payout thresholds by currency
@@ -186,18 +247,23 @@ platformSettingsSchema.statics.getTierRate = async function (tierName) {
 };
 
 // Static method to determine tier based on sales amount
+// IMPORTANT: salesAmount is expected in CENTS (from Sale aggregations)
+// Tier thresholds (minSales) are in POUNDS
 platformSettingsSchema.statics.calculateTierFromSales = async function (
   salesAmount
 ) {
   const settings = await this.getSettings();
 
-  if (salesAmount >= settings.tiers.gold.minSales) {
+  // Convert salesAmount from cents to pounds for comparison
+  const salesInPounds = salesAmount / 100;
+
+  if (salesInPounds >= settings.tiers.gold.minSales) {
     return {
       tier: "Gold",
       royaltyRate: settings.tiers.gold.royaltyRate,
       platformFee: settings.tiers.gold.platformFee,
     };
-  } else if (salesAmount >= settings.tiers.silver.minSales) {
+  } else if (salesInPounds >= settings.tiers.silver.minSales) {
     return {
       tier: "Silver",
       royaltyRate: settings.tiers.silver.royaltyRate,

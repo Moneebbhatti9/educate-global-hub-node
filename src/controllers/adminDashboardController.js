@@ -256,15 +256,16 @@ const getAdminDashboard = async (req, res) => {
       })),
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10);
 
-    // Response
-    return successResponse(res, "Admin dashboard data retrieved", {
+    // Get total sales count
+    const totalSalesCount = await Sale.countDocuments({ status: "completed" });
+
+    // Response - Note: successResponse(res, data, message)
+    return successResponse(res, {
       stats: {
         totalUsers,
         activeJobs,
         forumPosts,
-        totalSales: recentSalesWithCommission.length > 0
-          ? await Sale.countDocuments({ status: "completed" })
-          : 0,
+        totalSales: totalSalesCount,
         platformRevenue: totalPlatformCommission,
         platformRevenueFormatted: formatCurrency(totalPlatformCommission, "GBP"),
       },
@@ -277,7 +278,7 @@ const getAdminDashboard = async (req, res) => {
       recentSales: recentSalesWithCommission,
       topResources,
       recentActivities,
-    });
+    }, "Admin dashboard data retrieved");
   } catch (error) {
     console.error("Admin dashboard error:", error);
     return errorResponse(res, "Failed to fetch dashboard data", error);
