@@ -55,9 +55,7 @@ const getRecentCandidates = async (req, res) => {
     const jobIds = await Job.find({ schoolId }, "_id").lean();
 
     if (!jobIds.length) {
-      return successResponse(res, "No jobs found for this school", {
-        data: [],
-      });
+      return successResponse(res, { data: [] }, "No jobs found for this school");
     }
 
     const applications = await JobApplication.find({

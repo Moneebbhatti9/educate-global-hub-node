@@ -92,6 +92,57 @@ const generateUploadPreset = (folder = "educate-hub") => {
   }
 };
 
+// Helper function to generate a signed download URL
+const generateSignedDownloadUrl = (publicId, options = {}) => {
+  try {
+    const {
+      resourceType = "image",
+      format = "",
+      expiresIn = 3600, // 1 hour default
+    } = options;
+
+    // Generate signed URL with expiration
+    const timestamp = Math.round(Date.now() / 1000);
+    const expiresAt = timestamp + expiresIn;
+
+    return cloudinary.url(publicId, {
+      resource_type: resourceType,
+      type: "upload",
+      sign_url: true,
+      secure: true,
+      format: format,
+    });
+  } catch (error) {
+    console.error("Error generating signed download URL:", error);
+    return null;
+  }
+};
+
+// Helper function to verify Cloudinary credentials
+const verifyCredentials = async () => {
+  try {
+    // Try to ping the API
+    const result = await cloudinary.api.ping();
+    return { success: true, status: result.status };
+  } catch (error) {
+    console.error("Cloudinary credentials verification failed:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Helper function to get resource details
+const getResourceDetails = async (publicId, resourceType = "image") => {
+  try {
+    const result = await cloudinary.api.resource(publicId, {
+      resource_type: resourceType,
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error getting resource details:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   cloudinary,
   uploadImage,
@@ -99,4 +150,7 @@ module.exports = {
   uploadAvatar,
   uploadDocument,
   generateUploadPreset,
+  generateSignedDownloadUrl,
+  verifyCredentials,
+  getResourceDetails,
 };

@@ -194,10 +194,10 @@ const createOrUpdateSchoolProfile = async (req, res) => {
     // Update user's profile completion status
     await User.findByIdAndUpdate(userId, { isProfileComplete: isComplete });
 
-    return successResponse(res, "School profile updated successfully", {
+    return successResponse(res, {
       data: schoolProfile,
-      message: isComplete ? "Profile is complete" : "Profile is incomplete",
-    });
+      profileStatus: isComplete ? "Profile is complete" : "Profile is incomplete",
+    }, "School profile updated successfully");
   } catch (error) {
     console.error("Error in createOrUpdateSchoolProfile:", error);
     return errorResponse(res, "Failed to update school profile", 500);
@@ -251,9 +251,9 @@ const getSchoolProfileById = async (req, res) => {
       return errorResponse(res, "School profile not found", 404);
     }
 
-    return successResponse(res, "School profile retrieved successfully", {
+    return successResponse(res, {
       data: schoolProfile,
-    });
+    }, "School profile retrieved successfully");
   } catch (error) {
     console.error("Error in getSchoolProfileById:", error);
     return errorResponse(res, "Failed to retrieve school profile", 500);
@@ -295,7 +295,7 @@ const searchSchools = async (req, res) => {
 
     const total = await SchoolProfile.countDocuments(query);
 
-    return successResponse(res, "Schools retrieved successfully", {
+    return successResponse(res, {
       data: schools,
       pagination: {
         page: parseInt(page),
@@ -303,7 +303,7 @@ const searchSchools = async (req, res) => {
         total,
         pages: Math.ceil(total / parseInt(limit)),
       },
-    });
+    }, "Schools retrieved successfully");
   } catch (error) {
     console.error("Error in searchSchools:", error);
     return errorResponse(res, "Failed to search schools", 500);
@@ -407,9 +407,9 @@ const updateProgram = async (req, res) => {
     });
     await program.save();
 
-    return successResponse(res, "Program updated successfully", {
+    return successResponse(res, {
       data: program,
-    });
+    }, "Program updated successfully");
   } catch (err) {
     console.error("updateProgram:", err);
     return errorResponse(res, "Failed to update program", 500);
@@ -430,9 +430,9 @@ const deleteProgram = async (req, res) => {
     if (!owns) return errorResponse(res, "Forbidden", 403);
 
     await program.deleteOne();
-    return successResponse(res, "Program deleted successfully", {
+    return successResponse(res, {
       data: { id },
-    });
+    }, "Program deleted successfully");
   } catch (err) {
     console.error("deleteProgram:", err);
     return errorResponse(res, "Failed to delete program", 500);
@@ -448,7 +448,7 @@ const listMyPrograms = async (req, res) => {
     const programs = await SchoolProgram.find({ schoolId }).sort({
       createdAt: -1,
     });
-    return successResponse(res, "Programs retrieved", { data: programs });
+    return successResponse(res, { data: programs }, "Programs retrieved");
   } catch (err) {
     console.error("listMyPrograms:", err);
     return errorResponse(res, "Failed to fetch programs", 500);
@@ -463,7 +463,7 @@ const listProgramsBySchoolId = async (req, res) => {
       schoolId,
       isActive: true,
     }).sort({ createdAt: -1 });
-    return successResponse(res, "Programs retrieved", { data: programs });
+    return successResponse(res, { data: programs }, "Programs retrieved");
   } catch (err) {
     console.error("listProgramsBySchoolId:", err);
     return errorResponse(res, "Failed to fetch programs", 500);
@@ -502,9 +502,9 @@ const addSchoolMedia = async (req, res) => {
       })
     );
 
-    return successResponse(res, "Media uploaded successfully", {
+    return successResponse(res, {
       files: uploadedMedia.filter(Boolean),
-    });
+    }, "Media uploaded successfully");
   } catch (err) {
     console.error("addSchoolMedia error:", err);
     return errorResponse(res, "Failed to upload media", 500);
@@ -516,7 +516,7 @@ const getSchoolMedia = async (req, res) => {
   try {
     const { schoolId } = req.params;
     const media = await SchoolMedia.find({ schoolId }).sort({ createdAt: -1 });
-    return successResponse(res, "Media retrieved", { files: media });
+    return successResponse(res, { files: media }, "Media retrieved");
   } catch (err) {
     console.error("getSchoolMedia error:", err);
     return errorResponse(res, "Failed to fetch media", 500);

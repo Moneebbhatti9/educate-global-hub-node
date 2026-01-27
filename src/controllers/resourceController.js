@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const resource = require("../models/resource");
 const resourcePurchase = require("../models/resourcePurchase");
 const User = require("../models/User");
+const JobNotification = require("../models/JobNotification");
 const { errorResponse, successResponse } = require("../utils/response");
 const { sendResourceStatusUpdateEmail } = require("../config/email");
 
@@ -283,6 +284,40 @@ exports.updateResourceStatus = async (req, res) => {
         status
       );
     }
+
+    // Create in-app notification for resource owner
+    try {
+      const statusMessages = {
+        approved: `Your resource "${resourceDoc.title}" has been approved and is now live!`,
+        rejected: `Your resource "${resourceDoc.title}" was not approved. Please review and resubmit.`,
+        pending: `Your resource "${resourceDoc.title}" is now pending review.`,
+      };
+
+      const statusTitles = {
+        approved: "Resource Approved!",
+        rejected: "Resource Needs Changes",
+        pending: "Resource Pending Review",
+      };
+
+      await JobNotification.createNotification({
+        userId: resourceDoc.createdBy.userId._id,
+        type: "system_alert",
+        category: "system",
+        priority: status === "approved" ? "high" : "medium",
+        title: statusTitles[status] || "Resource Status Updated",
+        message: statusMessages[status] || `Your resource "${resourceDoc.title}" status has been updated to ${status}.`,
+        actionUrl: `/teacher/resources/${resourceId}`,
+        actionText: "View Resource",
+        metadata: {
+          resourceId: resourceId,
+          resourceTitle: resourceDoc.title,
+          status: status,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Failed to create resource status notification:", notificationError);
+    }
+
     return successResponse(
       res,
       {

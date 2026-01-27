@@ -8,6 +8,12 @@
  * Additional fees:
  * - 20p/20c transaction fee for items under £3/$3
  * - VAT is deducted before royalty calculation
+ *
+ * IMPORTANT: Unit Conventions in this module:
+ * - All price/amount parameters expect CENTS/PENCE (smallest currency unit)
+ * - This is because Stripe works in smallest units
+ * - The formatCurrency() function in this file converts FROM cents TO display format
+ * - For decimal-based formatting, use the currency.js utility instead
  */
 
 // VAT rates by country
@@ -158,10 +164,13 @@ function calculateRoyalty(
 }
 
 /**
- * Format currency for display
- * @param {number} amount - Amount in smallest unit (pence/cents)
+ * Format currency for display (converts FROM cents/pence)
+ * NOTE: This function expects amount in CENTS/PENCE, not decimal!
+ * For decimal input, use formatCurrency from utils/currency.js
+ *
+ * @param {number} amount - Amount in smallest unit (pence/cents) e.g., 999 for £9.99
  * @param {string} currency - Currency code
- * @returns {string} Formatted amount
+ * @returns {string} Formatted amount e.g., "£9.99"
  */
 function formatCurrency(amount, currency) {
   const symbols = {
