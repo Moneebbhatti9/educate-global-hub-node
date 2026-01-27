@@ -66,8 +66,9 @@ exports.postReply = async (req, res) => {
     await reply.populate("createdBy", "firstName lastName avatarUrl role");
 
     // Create notification for discussion owner (LinkedIn-style)
+    let notification = null;
     if (!parentReply) {
-      await createNotification({
+      notification = await createNotification({
         recipient: discussion.createdBy._id,
         sender: req.user.userId,
         type: "comment",
@@ -77,7 +78,7 @@ exports.postReply = async (req, res) => {
       });
     } else {
       // Create notification for parent reply owner
-      await createNotification({
+      notification = await createNotification({
         recipient: parentReplyData.createdBy._id,
         sender: req.user.userId,
         type: "reply",
@@ -90,7 +91,7 @@ exports.postReply = async (req, res) => {
     // Create notifications for mentioned users
     if (mentions && mentions.length > 0) {
       for (const mentionedUserId of mentions) {
-        await createNotification({
+        const mentionNotification = await createNotification({
           recipient: mentionedUserId,
           sender: req.user.userId,
           type: "mention",
@@ -98,6 +99,12 @@ exports.postReply = async (req, res) => {
           comment: reply._id,
           message: `mentioned you in a comment`,
         });
+
+        // Emit mention notification in real-time
+        const io = req.app.get("io");
+        if (io && mentionNotification) {
+          io.to(`user:${mentionedUserId}`).emit("notification:new", mentionNotification);
+        }
       }
     }
 
@@ -106,11 +113,11 @@ exports.postReply = async (req, res) => {
     if (io) {
       io.to(`discussion:${discussionId}`).emit("comment:new", reply);
 
-      // Notify discussion owner in real-time
-      io.to(`user:${discussion.createdBy._id}`).emit("notification:new", {
-        type: parentReply ? "reply" : "comment",
-        message: `Someone ${parentReply ? "replied to" : "commented on"} your post`,
-      });
+      // Notify discussion/comment owner in real-time with full notification object
+      const recipientId = parentReply ? parentReplyData.createdBy._id : discussion.createdBy._id;
+      if (notification) {
+        io.to(`user:${recipientId}`).emit("notification:new", notification);
+      }
     }
 
     return successResponse(res, reply, "Reply posted successfully", 201);
@@ -238,13 +245,14 @@ exports.toggleLikeReply = async (req, res) => {
     if (!reply) return errorResponse(res, "Reply not found", 404);
 
     const alreadyLiked = reply.likes.includes(userId);
+    let notification = null;
     if (alreadyLiked) {
       reply.likes.pull(userId);
     } else {
       reply.likes.push(userId);
 
       // Create notification for comment owner (LinkedIn-style)
-      await createNotification({
+      notification = await createNotification({
         recipient: reply.createdBy._id,
         sender: userId,
         type: "like",
@@ -264,12 +272,9 @@ exports.toggleLikeReply = async (req, res) => {
         likes: reply.likes.length,
       });
 
-      // Real-time notification
-      if (!alreadyLiked) {
-        io.to(`user:${reply.createdBy._id}`).emit("notification:new", {
-          type: "like",
-          message: "Someone liked your comment",
-        });
+      // Real-time notification with full notification object
+      if (!alreadyLiked && notification) {
+        io.to(`user:${reply.createdBy._id}`).emit("notification:new", notification);
       }
     }
 
