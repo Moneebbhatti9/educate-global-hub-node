@@ -136,6 +136,324 @@ async function createPaymentIntent(paymentData) {
 }
 
 /**
+ * Create a Stripe Checkout Session for subscription purchase
+ * @param {object} subscriptionData - Subscription checkout information
+ * @returns {Promise<object>} Checkout session object
+ */
+async function createSubscriptionCheckoutSession(subscriptionData) {
+  const {
+    priceId,
+    customerId,
+    customerEmail,
+    successUrl,
+    cancelUrl,
+    trialDays,
+    metadata,
+    allowPromotionCodes,
+  } = subscriptionData;
+
+  try {
+    const sessionConfig = {
+      payment_method_types: ["card"],
+      mode: "subscription",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        ...metadata,
+        marketplace: "educate_global_hub",
+        type: "subscription",
+      },
+      subscription_data: {
+        metadata: {
+          ...metadata,
+          marketplace: "educate_global_hub",
+        },
+      },
+    };
+
+    // Use existing customer or create new via email
+    if (customerId) {
+      sessionConfig.customer = customerId;
+    } else if (customerEmail) {
+      sessionConfig.customer_email = customerEmail;
+    }
+
+    // Add line item with price ID
+    sessionConfig.line_items = [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ];
+
+    // Add trial period if specified
+    if (trialDays && trialDays > 0) {
+      sessionConfig.subscription_data.trial_period_days = trialDays;
+    }
+
+    // Allow promotion codes if specified
+    if (allowPromotionCodes) {
+      sessionConfig.allow_promotion_codes = true;
+    }
+
+    // Enable automatic tax calculation if configured
+    // sessionConfig.automatic_tax = { enabled: true };
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    return session;
+  } catch (error) {
+    console.error("Error creating subscription checkout session:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create or retrieve a Stripe Customer
+ * @param {object} customerData - Customer information
+ * @returns {Promise<object>} Customer object
+ */
+async function createOrGetCustomer(customerData) {
+  const { email, userId, name, metadata } = customerData;
+
+  try {
+    // Search for existing customer by email
+    const existingCustomers = await stripe.customers.list({
+      email: email,
+      limit: 1,
+    });
+
+    if (existingCustomers.data.length > 0) {
+      // Update existing customer with new metadata
+      const customer = await stripe.customers.update(existingCustomers.data[0].id, {
+        metadata: {
+          ...existingCustomers.data[0].metadata,
+          userId: userId,
+          ...metadata,
+        },
+      });
+      return customer;
+    }
+
+    // Create new customer
+    const customer = await stripe.customers.create({
+      email,
+      name,
+      metadata: {
+        userId,
+        ...metadata,
+      },
+    });
+
+    return customer;
+  } catch (error) {
+    console.error("Error creating/getting Stripe customer:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create a Stripe Product and Price for a subscription plan
+ * @param {object} planData - Plan information
+ * @returns {Promise<object>} { product, price }
+ */
+async function createSubscriptionProduct(planData) {
+  const {
+    name,
+    description,
+    amount,
+    currency,
+    interval, // 'month' or 'year'
+    metadata,
+  } = planData;
+
+  try {
+    // Create product
+    const product = await stripe.products.create({
+      name,
+      description,
+      metadata: {
+        ...metadata,
+        marketplace: "educate_global_hub",
+      },
+    });
+
+    // Create price for the product
+    const price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: amount,
+      currency: currency.toLowerCase(),
+      recurring: {
+        interval: interval === "annual" ? "year" : "month",
+      },
+      metadata: {
+        ...metadata,
+      },
+    });
+
+    return { product, price };
+  } catch (error) {
+    console.error("Error creating subscription product:", error);
+    throw error;
+  }
+}
+
+/**
+ * Cancel a Stripe subscription
+ * @param {string} subscriptionId - Stripe subscription ID
+ * @param {boolean} cancelImmediately - Cancel immediately or at period end
+ * @returns {Promise<object>} Updated subscription
+ */
+async function cancelSubscription(subscriptionId, cancelImmediately = false) {
+  try {
+    if (cancelImmediately) {
+      return await stripe.subscriptions.cancel(subscriptionId);
+    } else {
+      return await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+    }
+  } catch (error) {
+    console.error("Error canceling subscription:", error);
+    throw error;
+  }
+}
+
+/**
+ * Retrieve a Stripe subscription
+ * @param {string} subscriptionId - Stripe subscription ID
+ * @returns {Promise<object>} Subscription object
+ */
+async function getSubscription(subscriptionId) {
+  try {
+    return await stripe.subscriptions.retrieve(subscriptionId);
+  } catch (error) {
+    console.error("Error retrieving subscription:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update a Stripe subscription to a new plan/price
+ * @param {string} subscriptionId - Stripe subscription ID
+ * @param {string} newPriceId - New Stripe Price ID
+ * @param {object} options - Update options
+ * @returns {Promise<object>} Updated subscription
+ */
+async function updateSubscriptionPlan(subscriptionId, newPriceId, options = {}) {
+  const { prorationBehavior = "create_prorations" } = options;
+
+  try {
+    // Get current subscription to find the subscription item ID
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscriptionItemId = subscription.items.data[0].id;
+
+    // Update the subscription with new price
+    const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
+      items: [
+        {
+          id: subscriptionItemId,
+          price: newPriceId,
+        },
+      ],
+      proration_behavior: prorationBehavior,
+      metadata: {
+        ...subscription.metadata,
+        lastPlanChange: new Date().toISOString(),
+      },
+    });
+
+    return updatedSubscription;
+  } catch (error) {
+    console.error("Error updating subscription plan:", error);
+    throw error;
+  }
+}
+
+/**
+ * Preview proration for a plan change
+ * @param {string} subscriptionId - Stripe subscription ID
+ * @param {string} newPriceId - New Stripe Price ID
+ * @returns {Promise<object>} Proration preview with amounts
+ */
+async function previewPlanChange(subscriptionId, newPriceId) {
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscriptionItemId = subscription.items.data[0].id;
+
+    // Create an invoice preview to see the proration
+    const invoice = await stripe.invoices.createPreview({
+      customer: subscription.customer,
+      subscription: subscriptionId,
+      subscription_items: [
+        {
+          id: subscriptionItemId,
+          price: newPriceId,
+        },
+      ],
+      subscription_proration_behavior: "create_prorations",
+    });
+
+    // Calculate the proration amount
+    const prorationItems = invoice.lines.data.filter(
+      (line) => line.proration
+    );
+    const prorationAmount = prorationItems.reduce(
+      (sum, item) => sum + item.amount,
+      0
+    );
+
+    return {
+      immediateCharge: prorationAmount > 0 ? prorationAmount : 0,
+      credit: prorationAmount < 0 ? Math.abs(prorationAmount) : 0,
+      nextInvoiceAmount: invoice.total,
+      currency: invoice.currency,
+    };
+  } catch (error) {
+    console.error("Error previewing plan change:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create a Stripe Billing Portal session
+ * @param {string} customerId - Stripe Customer ID
+ * @param {string} returnUrl - URL to return to after portal session
+ * @returns {Promise<object>} Portal session
+ */
+async function createBillingPortalSession(customerId, returnUrl) {
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+    return session;
+  } catch (error) {
+    console.error("Error creating billing portal session:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get customer invoices
+ * @param {string} customerId - Stripe Customer ID
+ * @param {number} limit - Number of invoices to retrieve
+ * @returns {Promise<object>} List of invoices
+ */
+async function getCustomerInvoices(customerId, limit = 10) {
+  try {
+    const invoices = await stripe.invoices.list({
+      customer: customerId,
+      limit,
+    });
+    return invoices;
+  } catch (error) {
+    console.error("Error retrieving customer invoices:", error);
+    throw error;
+  }
+}
+
+/**
  * Create a Stripe Checkout Session for buyer payment
  * @param {object} sessionData - Checkout session information
  * @returns {Promise<object>} Checkout session object
@@ -285,6 +603,15 @@ module.exports = {
   createAccountLink,
   createPaymentIntent,
   createCheckoutSession,
+  createSubscriptionCheckoutSession,
+  createOrGetCustomer,
+  createSubscriptionProduct,
+  cancelSubscription,
+  getSubscription,
+  updateSubscriptionPlan,
+  previewPlanChange,
+  createBillingPortalSession,
+  getCustomerInvoices,
   createPayout,
   createRefund,
   getAccountBalance,

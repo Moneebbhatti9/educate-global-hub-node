@@ -1,5 +1,24 @@
 const mongoose = require("mongoose");
 
+// Subscription system initialization (lazy loaded to avoid circular deps)
+let subscriptionInitialized = false;
+
+/**
+ * Initialize subscription system defaults after DB connection
+ * Safe to call multiple times - uses flag to prevent re-initialization
+ */
+const initializeSubscriptionDefaults = async () => {
+  if (subscriptionInitialized) return;
+
+  try {
+    const { initializeSubscriptionSystem } = require("../scripts/seedSubscriptionData");
+    await initializeSubscriptionSystem();
+    subscriptionInitialized = true;
+  } catch (error) {
+    console.error("⚠️ Subscription system initialization skipped:", error.message);
+  }
+};
+
 // MongoDB connection options
 const options = {
   maxPoolSize: 10,
@@ -19,6 +38,9 @@ const connectDB = async () => {
     const conn = await mongoose.connect(mongoURI, options);
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+
+    // Initialize subscription system defaults
+    await initializeSubscriptionDefaults();
 
     // Handle connection events
     mongoose.connection.on("error", (err) => {

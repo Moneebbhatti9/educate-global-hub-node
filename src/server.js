@@ -38,6 +38,8 @@ const gdprRoutes = require("./routes/gdpr");
 const adminGdprRoutes = require("./routes/adminGdpr");
 const adminSettingsRoutes = require("./routes/adminSettings");
 const dropdownRoutes = require("./routes/dropdowns");
+const subscriptionRoutes = require("./routes/subscriptions");
+const adminSubscriptionRoutes = require("./routes/adminSubscriptions");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
 
 const app = express();
@@ -180,6 +182,8 @@ app.use(`/api/${apiVersion}/gdpr`, gdprRoutes);
 app.use(`/api/${apiVersion}/admin/gdpr`, adminGdprRoutes);
 app.use(`/api/${apiVersion}/admin/settings`, adminSettingsRoutes);
 app.use(`/api/${apiVersion}/dropdowns`, dropdownRoutes);
+app.use(`/api/${apiVersion}/subscriptions`, subscriptionRoutes);
+app.use(`/api/${apiVersion}/admin/subscriptions`, adminSubscriptionRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

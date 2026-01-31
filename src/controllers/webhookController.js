@@ -8,6 +8,9 @@ const Resource = require("../models/resource");
 const ResourcePurchase = require("../models/resourcePurchase");
 const PlatformSettings = require("../models/PlatformSettings");
 const JobNotification = require("../models/JobNotification");
+const WebhookEvent = require("../models/WebhookEvent");
+const UserSubscription = require("../models/UserSubscription");
+const SubscriptionPlan = require("../models/SubscriptionPlan");
 const { verifyWebhookSignature } = require("../config/stripe");
 const { successResponse, errorResponse } = require("../utils/response");
 const emailService = require("../config/email");
@@ -78,6 +81,27 @@ async function handleStripeWebhook(req, res, next) {
         await handleExternalAccountCreated(event.data.object);
         break;
 
+      // Subscription events
+      case "customer.subscription.created":
+        await handleSubscriptionCreated(event);
+        break;
+
+      case "customer.subscription.updated":
+        await handleSubscriptionUpdated(event);
+        break;
+
+      case "customer.subscription.deleted":
+        await handleSubscriptionDeleted(event);
+        break;
+
+      case "invoice.payment_failed":
+        await handleInvoicePaymentFailed(event);
+        break;
+
+      case "invoice.payment_succeeded":
+        await handleInvoicePaymentSucceeded(event);
+        break;
+
       default:
         console.log(`ℹ️ Unhandled webhook event type: ${event.type}`);
     }
@@ -98,12 +122,19 @@ async function handleStripeWebhook(req, res, next) {
 
 /**
  * Handle successful checkout session completion
- * Creates Sale, ResourcePurchase, updates BalanceLedger and SellerTier
+ * Routes to appropriate handler based on checkout mode (payment vs subscription)
  */
 async function handleCheckoutSessionCompleted(session) {
   console.log(`✅ Checkout session completed: ${session.id}`);
 
   try {
+    // Check if this is a subscription checkout
+    if (session.mode === "subscription") {
+      await handleSubscriptionCheckoutCompleted(session);
+      return;
+    }
+
+    // Otherwise, handle as payment (resource purchase)
     // Check if sale already exists for this session
     const existingSale = await Sale.findOne({
       $or: [
@@ -626,6 +657,503 @@ async function handleExternalAccountCreated(externalAccount) {
     console.log(`✅ External account connected for user ${user._id}`);
   } catch (error) {
     console.error("Error handling external account creation:", error);
+    throw error;
+  }
+}
+
+/**
+ * Handle subscription checkout session completion
+ * Creates UserSubscription record when user completes subscription checkout
+ */
+async function handleSubscriptionCheckoutCompleted(session) {
+  console.log(`✅ Subscription checkout completed: ${session.id}`);
+
+  try {
+    const { userId, planId, planName, userEmail } = session.metadata || {};
+
+    if (!userId || !planId) {
+      console.error("Missing userId or planId in subscription checkout metadata:", session.metadata);
+      return;
+    }
+
+    // Check for idempotency - don't process same checkout twice
+    const existingSubscription = await UserSubscription.findOne({
+      userId: new mongoose.Types.ObjectId(userId),
+      stripeSubscriptionId: session.subscription,
+    });
+
+    if (existingSubscription) {
+      console.log(`Subscription already exists for session ${session.id}`);
+      return;
+    }
+
+    // Get the Stripe subscription details
+    const { stripe } = require("../config/stripe");
+    const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+
+    // Get the plan
+    const plan = await SubscriptionPlan.findById(planId);
+    if (!plan) {
+      console.error(`Subscription plan not found: ${planId}`);
+      return;
+    }
+
+    // Determine subscription status
+    let status = "active";
+    if (stripeSubscription.status === "trialing") {
+      status = "trial";
+    } else if (stripeSubscription.status === "past_due") {
+      status = "past_due";
+    }
+
+    // Create user subscription record
+    const userSubscription = await UserSubscription.create({
+      userId: new mongoose.Types.ObjectId(userId),
+      planId: new mongoose.Types.ObjectId(planId),
+      status,
+      stripeSubscriptionId: session.subscription,
+      stripeCustomerId: session.customer,
+      startDate: new Date(stripeSubscription.current_period_start * 1000),
+      currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+      trialEndDate: stripeSubscription.trial_end
+        ? new Date(stripeSubscription.trial_end * 1000)
+        : null,
+      pricePaid: mongoose.Types.Decimal128.fromString(
+        (session.amount_total || 0).toString()
+      ),
+      metadata: new Map([
+        ["checkoutSessionId", session.id],
+        ["planName", planName || plan.name],
+      ]),
+    });
+
+    // Update user's stripeCustomerId if not already set
+    await User.findByIdAndUpdate(userId, {
+      stripeCustomerId: session.customer,
+    });
+
+    console.log(`✅ Subscription created: ${userSubscription._id} for user ${userId}`);
+
+    // Send confirmation email
+    try {
+      const user = await User.findById(userId);
+      if (user && user.email) {
+        await emailService.sendSubscriptionConfirmation(user.email, user.firstName, {
+          planName: planName || plan.name,
+          amount: `£${((session.amount_total || 0) / 100).toFixed(2)}`,
+          nextBillingDate: new Date(
+            stripeSubscription.current_period_end * 1000
+          ).toLocaleDateString(),
+          isTrialing: status === "trial",
+          trialEndDate: stripeSubscription.trial_end
+            ? new Date(stripeSubscription.trial_end * 1000).toLocaleDateString()
+            : null,
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send subscription confirmation email:", emailError);
+    }
+
+    // Create in-app notification
+    try {
+      await JobNotification.createNotification({
+        userId,
+        type: "system_alert",
+        category: "system",
+        priority: "high",
+        title: "Subscription Activated!",
+        message: `Your ${planName || plan.name} subscription is now active.`,
+        actionUrl: "/dashboard/subscription",
+        actionText: "View Subscription",
+        metadata: {
+          subscriptionId: userSubscription._id.toString(),
+          planName: planName || plan.name,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Failed to create subscription notification:", notificationError);
+    }
+  } catch (error) {
+    console.error("Error handling subscription checkout completed:", error);
+    throw error;
+  }
+}
+
+/**
+ * Handle subscription created event
+ */
+async function handleSubscriptionCreated(event) {
+  const subscription = event.data.object;
+  console.log(`📝 Subscription created: ${subscription.id}`);
+
+  // Record event for idempotency
+  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+    subscriptionId: subscription.id,
+    customerId: subscription.customer,
+  });
+
+  if (!isNew) {
+    console.log(`Event ${event.id} already processed, skipping`);
+    await WebhookEvent.markSkipped(event.id, "Already processed");
+    return;
+  }
+
+  try {
+    // Subscription creation is primarily handled by checkout.session.completed
+    // This handler is for subscriptions created outside of checkout (e.g., API)
+    const existingSubscription = await UserSubscription.findOne({
+      stripeSubscriptionId: subscription.id,
+    });
+
+    if (existingSubscription) {
+      console.log(`Subscription ${subscription.id} already tracked`);
+      await WebhookEvent.markProcessed(event.id);
+      return;
+    }
+
+    // If we don't have this subscription, we need to find the user by customer ID
+    const user = await User.findOne({ stripeCustomerId: subscription.customer });
+
+    if (!user) {
+      console.warn(`No user found for Stripe customer: ${subscription.customer}`);
+      await WebhookEvent.markFailed(event.id, "User not found");
+      return;
+    }
+
+    // Find the plan by Stripe price ID
+    const priceId = subscription.items.data[0]?.price?.id;
+    const plan = await SubscriptionPlan.findByStripePriceId(priceId);
+
+    if (!plan) {
+      console.warn(`No plan found for Stripe price: ${priceId}`);
+      await WebhookEvent.markFailed(event.id, "Plan not found");
+      return;
+    }
+
+    // Create subscription record
+    let status = "active";
+    if (subscription.status === "trialing") status = "trial";
+    else if (subscription.status === "past_due") status = "past_due";
+
+    await UserSubscription.create({
+      userId: user._id,
+      planId: plan._id,
+      status,
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: subscription.customer,
+      startDate: new Date(subscription.current_period_start * 1000),
+      currentPeriodStart: new Date(subscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      trialEndDate: subscription.trial_end
+        ? new Date(subscription.trial_end * 1000)
+        : null,
+    });
+
+    await WebhookEvent.markProcessed(event.id);
+    console.log(`✅ Subscription record created for ${subscription.id}`);
+  } catch (error) {
+    await WebhookEvent.markFailed(event.id, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle subscription updated event
+ */
+async function handleSubscriptionUpdated(event) {
+  const subscription = event.data.object;
+  console.log(`🔄 Subscription updated: ${subscription.id}`);
+
+  // Record event for idempotency
+  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+    subscriptionId: subscription.id,
+    customerId: subscription.customer,
+  });
+
+  if (!isNew) {
+    console.log(`Event ${event.id} already processed, skipping`);
+    await WebhookEvent.markSkipped(event.id, "Already processed");
+    return;
+  }
+
+  try {
+    // Find and update our subscription record
+    const userSubscription = await UserSubscription.findOne({
+      stripeSubscriptionId: subscription.id,
+    });
+
+    if (!userSubscription) {
+      console.warn(`No subscription record found for: ${subscription.id}`);
+      await WebhookEvent.markFailed(event.id, "Subscription not found");
+      return;
+    }
+
+    // Map Stripe status to our status
+    let status = userSubscription.status;
+    switch (subscription.status) {
+      case "active":
+        status = "active";
+        break;
+      case "trialing":
+        status = "trial";
+        break;
+      case "past_due":
+        status = "past_due";
+        break;
+      case "canceled":
+        status = "cancelled";
+        break;
+      case "unpaid":
+        status = "expired";
+        break;
+    }
+
+    // Update subscription
+    userSubscription.status = status;
+    userSubscription.currentPeriodStart = new Date(subscription.current_period_start * 1000);
+    userSubscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    userSubscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+
+    if (subscription.canceled_at) {
+      userSubscription.cancelledAt = new Date(subscription.canceled_at * 1000);
+    }
+
+    if (subscription.cancel_at) {
+      userSubscription.endDate = new Date(subscription.cancel_at * 1000);
+    }
+
+    await userSubscription.save();
+    await WebhookEvent.markProcessed(event.id);
+
+    console.log(`✅ Subscription ${subscription.id} updated to status: ${status}`);
+
+    // Notify user of status change if significant
+    if (status === "past_due") {
+      try {
+        const user = await User.findById(userSubscription.userId);
+        if (user && user.email) {
+          await emailService.sendPaymentFailedNotification(user.email, user.firstName, {
+            nextRetryDate: "within 3-5 days",
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send payment failed email:", emailError);
+      }
+    }
+  } catch (error) {
+    await WebhookEvent.markFailed(event.id, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle subscription deleted/cancelled event
+ */
+async function handleSubscriptionDeleted(event) {
+  const subscription = event.data.object;
+  console.log(`❌ Subscription deleted: ${subscription.id}`);
+
+  // Record event for idempotency
+  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+    subscriptionId: subscription.id,
+    customerId: subscription.customer,
+  });
+
+  if (!isNew) {
+    console.log(`Event ${event.id} already processed, skipping`);
+    await WebhookEvent.markSkipped(event.id, "Already processed");
+    return;
+  }
+
+  try {
+    // Find and update our subscription record
+    const userSubscription = await UserSubscription.findOne({
+      stripeSubscriptionId: subscription.id,
+    });
+
+    if (!userSubscription) {
+      console.warn(`No subscription record found for: ${subscription.id}`);
+      await WebhookEvent.markFailed(event.id, "Subscription not found");
+      return;
+    }
+
+    // Update to expired status
+    userSubscription.status = "expired";
+    userSubscription.endDate = new Date();
+    await userSubscription.save();
+
+    await WebhookEvent.markProcessed(event.id);
+
+    console.log(`✅ Subscription ${subscription.id} marked as expired`);
+
+    // Notify user
+    try {
+      const user = await User.findById(userSubscription.userId);
+      const plan = await SubscriptionPlan.findById(userSubscription.planId);
+
+      if (user && user.email) {
+        await emailService.sendSubscriptionCancelledNotification(user.email, user.firstName, {
+          planName: plan ? plan.name : "your subscription",
+        });
+      }
+
+      // Create in-app notification
+      await JobNotification.createNotification({
+        userId: userSubscription.userId,
+        type: "system_alert",
+        category: "system",
+        priority: "normal",
+        title: "Subscription Ended",
+        message: `Your ${plan ? plan.name : ""} subscription has ended. Renew to continue accessing premium features.`,
+        actionUrl: "/pricing",
+        actionText: "View Plans",
+      });
+    } catch (notifyError) {
+      console.error("Failed to send subscription ended notification:", notifyError);
+    }
+  } catch (error) {
+    await WebhookEvent.markFailed(event.id, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle invoice payment failed
+ */
+async function handleInvoicePaymentFailed(event) {
+  const invoice = event.data.object;
+  console.log(`❌ Invoice payment failed: ${invoice.id}`);
+
+  // Only handle subscription invoices
+  if (!invoice.subscription) {
+    return;
+  }
+
+  // Record event for idempotency
+  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+    subscriptionId: invoice.subscription,
+    customerId: invoice.customer,
+  });
+
+  if (!isNew) {
+    console.log(`Event ${event.id} already processed, skipping`);
+    return;
+  }
+
+  try {
+    // Find subscription
+    const userSubscription = await UserSubscription.findOne({
+      stripeSubscriptionId: invoice.subscription,
+    });
+
+    if (!userSubscription) {
+      await WebhookEvent.markFailed(event.id, "Subscription not found");
+      return;
+    }
+
+    // Update status to past_due (Stripe will retry)
+    userSubscription.status = "past_due";
+    await userSubscription.save();
+
+    await WebhookEvent.markProcessed(event.id);
+
+    // Notify user about failed payment
+    try {
+      const user = await User.findById(userSubscription.userId);
+      if (user && user.email) {
+        await emailService.sendPaymentFailedNotification(user.email, user.firstName, {
+          amount: `£${(invoice.amount_due / 100).toFixed(2)}`,
+          nextAttempt: invoice.next_payment_attempt
+            ? new Date(invoice.next_payment_attempt * 1000).toLocaleDateString()
+            : "soon",
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send payment failed email:", emailError);
+    }
+
+    console.log(`✅ Subscription ${invoice.subscription} marked as past_due`);
+  } catch (error) {
+    await WebhookEvent.markFailed(event.id, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle invoice payment succeeded (for renewals)
+ */
+async function handleInvoicePaymentSucceeded(event) {
+  const invoice = event.data.object;
+
+  // Only handle subscription invoices (not one-time payments)
+  if (!invoice.subscription) {
+    return;
+  }
+
+  // Skip if this is the first invoice (handled by checkout.session.completed)
+  if (invoice.billing_reason === "subscription_create") {
+    return;
+  }
+
+  console.log(`✅ Invoice payment succeeded: ${invoice.id} for subscription ${invoice.subscription}`);
+
+  // Record event for idempotency
+  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+    subscriptionId: invoice.subscription,
+    customerId: invoice.customer,
+  });
+
+  if (!isNew) {
+    console.log(`Event ${event.id} already processed, skipping`);
+    return;
+  }
+
+  try {
+    // Find subscription
+    const userSubscription = await UserSubscription.findOne({
+      stripeSubscriptionId: invoice.subscription,
+    });
+
+    if (!userSubscription) {
+      await WebhookEvent.markFailed(event.id, "Subscription not found");
+      return;
+    }
+
+    // Update status to active and reset usage
+    userSubscription.status = "active";
+
+    // Reset usage counters for new billing period
+    userSubscription.usage = {
+      featuredListings: 0,
+      candidateSearches: 0,
+      resourceUploads: 0,
+      bulkMessages: 0,
+      lastResetAt: new Date(),
+    };
+
+    await userSubscription.save();
+    await WebhookEvent.markProcessed(event.id);
+
+    // Notify user about successful renewal
+    try {
+      const user = await User.findById(userSubscription.userId);
+      const plan = await SubscriptionPlan.findById(userSubscription.planId);
+
+      if (user && user.email) {
+        await emailService.sendSubscriptionRenewedNotification(user.email, user.firstName, {
+          planName: plan ? plan.name : "your subscription",
+          amount: `£${(invoice.amount_paid / 100).toFixed(2)}`,
+          nextBillingDate: new Date(invoice.lines.data[0]?.period?.end * 1000).toLocaleDateString(),
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send renewal confirmation email:", emailError);
+    }
+
+    console.log(`✅ Subscription ${invoice.subscription} renewed successfully`);
+  } catch (error) {
+    await WebhookEvent.markFailed(event.id, error.message);
     throw error;
   }
 }

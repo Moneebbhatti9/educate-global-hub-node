@@ -11,13 +11,24 @@ const {
   getResourceByIdAdmin,
 } = require("../controllers/resourceController");
 const { authenticateToken, authorizeRoles } = require("../middleware/auth");
+const { requireFeature } = require("../middleware/featureAccess");
 const router = express.Router();
 
-//  Create Resource
-router.post("/create-resource", authenticateToken, createResource);
+//  Create Resource (requires resource_upload feature)
+router.post(
+  "/create-resource",
+  authenticateToken,
+  requireFeature("resource_upload"),
+  createResource
+);
 
-// Update Resource
-router.put("/update-resource/:id", authenticateToken, updateResource);
+// Update Resource (requires resource_upload feature)
+router.put(
+  "/update-resource/:id",
+  authenticateToken,
+  requireFeature("resource_upload"),
+  updateResource
+);
 
 // Update status
 router.patch(

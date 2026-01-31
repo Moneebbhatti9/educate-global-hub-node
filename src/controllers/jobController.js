@@ -6,6 +6,8 @@ const {
   errorResponse,
   sendResponse,
 } = require("../utils/response");
+const { checkFeatureAccess } = require("../middleware/featureAccess");
+const UserSubscription = require("../models/UserSubscription");
 
 class JobController {
   /**
@@ -101,10 +103,40 @@ class JobController {
         console.log(`Frontend override: isUrgent set to: ${jobData.isUrgent}`);
       }
 
+      // Validate subscription for featured listing
+      if (jobData.isFeatured) {
+        const featureResult = await checkFeatureAccess(userId, "featured_listing");
+        if (!featureResult.hasAccess) {
+          console.log(`User ${userId} does not have access to featured_listing feature. Reason: ${featureResult.reason}`);
+          // Silently disable the feature (soft enforcement)
+          jobData.isFeatured = false;
+          console.log("Featured listing disabled due to subscription requirement");
+        } else {
+          // Check usage limit
+          const usageResult = await UserSubscription.checkUsageLimit(userId, "featuredListings");
+          if (!usageResult.withinLimit) {
+            console.log(`User ${userId} has reached featured listing limit: ${usageResult.current}/${usageResult.limit}`);
+            jobData.isFeatured = false;
+            console.log("Featured listing disabled due to usage limit");
+          }
+        }
+      }
+
       console.log("About to create job with data:", { schoolId, jobData });
 
       const job = await JobService.createJob(schoolId, jobData, userId);
       console.log("Job created successfully:", job._id);
+
+      // Increment usage counter if featured listing was enabled
+      if (jobData.isFeatured && !isDraft) {
+        try {
+          await UserSubscription.incrementUsage(userId, "featuredListings", 1);
+          console.log(`Featured listing usage incremented for user ${userId}`);
+        } catch (usageError) {
+          console.error("Failed to increment featured listing usage:", usageError);
+          // Don't fail the job creation if usage tracking fails
+        }
+      }
 
       const message = isDraft
         ? "Job saved as draft successfully"
@@ -229,12 +261,42 @@ class JobController {
         );
       }
 
+      // Validate subscription and usage for featured listing
+      if (updateData.isFeatured) {
+        const featureResult = await checkFeatureAccess(userId, "featured_listing");
+        if (!featureResult.hasAccess) {
+          console.log(`User ${userId} does not have access to featured_listing feature during update. Reason: ${featureResult.reason}`);
+          updateData.isFeatured = false;
+        } else {
+          // Check usage limit
+          const usageResult = await UserSubscription.checkUsageLimit(userId, "featuredListings");
+          if (!usageResult.withinLimit) {
+            console.log(`User ${userId} has reached featured listing limit during update: ${usageResult.current}/${usageResult.limit}`);
+            updateData.isFeatured = false;
+          }
+        }
+      }
+
+      // Get the job to check if we're newly enabling featured
+      const existingJob = await JobService.getJobById(jobId);
+      const wasNotFeatured = existingJob && !existingJob.isFeatured;
+
       const job = await JobService.updateJob(
         jobId,
         schoolId,
         updateData,
         userId
       );
+
+      // Increment usage if we newly enabled featured
+      if (updateData.isFeatured && wasNotFeatured) {
+        try {
+          await UserSubscription.incrementUsage(userId, "featuredListings", 1);
+          console.log(`Featured listing usage incremented for user ${userId} during job update`);
+        } catch (usageError) {
+          console.error("Failed to increment featured listing usage:", usageError);
+        }
+      }
 
       return sendResponse(res, 200, true, "Job updated successfully", { job });
     } catch (error) {
@@ -357,9 +419,44 @@ class JobController {
 
       const updateData = {};
       if (isUrgent !== undefined) updateData.isUrgent = isUrgent;
-      if (isFeatured !== undefined) updateData.isFeatured = isFeatured;
+
+      // Get existing job to check if we're newly enabling featured
+      const existingJob = await JobService.getJobById(jobId);
+      const wasNotFeatured = existingJob && !existingJob.isFeatured;
+
+      // Validate subscription and usage for featured listing
+      if (isFeatured !== undefined) {
+        if (isFeatured) {
+          const featureResult = await checkFeatureAccess(userId, "featured_listing");
+          if (!featureResult.hasAccess) {
+            console.log(`User ${userId} does not have access to featured_listing feature. Reason: ${featureResult.reason}`);
+            updateData.isFeatured = false;
+          } else {
+            // Check usage limit
+            const usageResult = await UserSubscription.checkUsageLimit(userId, "featuredListings");
+            if (!usageResult.withinLimit) {
+              console.log(`User ${userId} has reached featured listing limit: ${usageResult.current}/${usageResult.limit}`);
+              updateData.isFeatured = false;
+            } else {
+              updateData.isFeatured = isFeatured;
+            }
+          }
+        } else {
+          updateData.isFeatured = isFeatured;
+        }
+      }
 
       const job = await JobService.updateJob(jobId, schoolId, updateData);
+
+      // Increment usage if we newly enabled featured
+      if (updateData.isFeatured && wasNotFeatured) {
+        try {
+          await UserSubscription.incrementUsage(userId, "featuredListings", 1);
+          console.log(`Featured listing usage incremented for user ${userId} during flag update`);
+        } catch (usageError) {
+          console.error("Failed to increment featured listing usage:", usageError);
+        }
+      }
 
       return sendResponse(res, 200, true, "Job flags updated successfully", {
         job,

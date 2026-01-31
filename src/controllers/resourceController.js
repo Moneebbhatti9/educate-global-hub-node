@@ -3,6 +3,7 @@ const resource = require("../models/resource");
 const resourcePurchase = require("../models/resourcePurchase");
 const User = require("../models/User");
 const JobNotification = require("../models/JobNotification");
+const UserSubscription = require("../models/UserSubscription");
 const { errorResponse, successResponse } = require("../utils/response");
 const { sendResourceStatusUpdateEmail } = require("../config/email");
 
@@ -105,6 +106,17 @@ exports.createResource = async (req, res) => {
       previewImages: previewImageUrls,
       mainFile: mainFileUrl,
     });
+
+    // Increment resource upload usage if not a draft
+    if (!saveAsDraftFlag) {
+      try {
+        await UserSubscription.incrementUsage(userId, "resourceUploads", 1);
+        console.log(`Resource upload usage incremented for user ${userId}`);
+      } catch (usageError) {
+        console.error("Failed to increment resource upload usage:", usageError);
+        // Don't fail the resource creation if usage tracking fails
+      }
+    }
 
     // populate user info for response
     const populatedResource = await resource

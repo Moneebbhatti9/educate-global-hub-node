@@ -62,6 +62,25 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Stripe-related fields
+    stripeCustomerId: {
+      type: String,
+      sparse: true,
+      index: true,
+      default: null,
+    },
+    // Stripe Connect account ID (for sellers receiving payouts)
+    stripeAccountId: {
+      type: String,
+      sparse: true,
+      index: true,
+      default: null,
+    },
+    stripeAccountStatus: {
+      type: String,
+      enum: ["pending", "active", "restricted", "disabled", null],
+      default: null,
+    },
     // GDPR-related fields
     deletionRequestedAt: {
       type: Date,
