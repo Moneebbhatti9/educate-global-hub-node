@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Educate Global Hub! 🎉</title>
+    <title>Your Verification Code - Educate Global Hub</title>
     <style>
         body {
             margin: 0;
@@ -51,43 +51,46 @@
             margin-bottom: 25px;
         }
 
-        .success-message {
-            background: #d4edda;
-            border-left: 4px solid #28a745;
+        .otp-code {
+            background: #fff;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        .otp-code h1 {
+            font-size: 36px;
+            color: #667eea;
+            margin: 0;
+            letter-spacing: 8px;
+            font-weight: bold;
+        }
+
+        .otp-code p {
+            color: #999;
+            margin: 10px 0 0 0;
+            font-size: 14px;
+        }
+
+        .expiry-notice {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .security-tip {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
             padding: 15px;
             margin: 25px 0;
         }
 
-        .success-message p {
+        .security-tip p {
             margin: 0;
-            color: #155724;
+            color: #856404;
             font-size: 14px;
-        }
-
-        .next-steps-title {
-            color: #333;
-            margin: 25px 0 15px 0;
-        }
-
-        .next-steps-list {
-            color: #666;
-            line-height: 1.8;
-            margin-bottom: 25px;
-        }
-
-        .cta-section {
-            text-align: center;
-            margin: 30px 0;
-        }
-
-        .cta-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 30px;
-            text-decoration: none;
-            border-radius: 25px;
-            display: inline-block;
-            font-weight: bold;
         }
 
         .signature {
@@ -111,43 +114,39 @@
         <!-- Header -->
         <div class="header">
             <h1>Educate Global Hub</h1>
-            <p>Welcome aboard! 🚀</p>
+            <p>Sign-in Verification</p>
         </div>
 
         <!-- Content -->
         <div class="content">
-            <h2 class="greeting">Welcome, {{userName}}! 🎉</h2>
+            <h2 class="greeting">Hello, {{userName}}!</h2>
 
             <p class="description">
-                Congratulations! Your email has been successfully verified and your account is now active.
-                You're ready to explore the amazing world of education with Educate Global Hub.
+                You're attempting to sign in to your Educate Global Hub account. To complete the sign-in process,
+                please enter the verification code below:
             </p>
 
-            <!-- Success Message -->
-            <div class="success-message">
+            <!-- OTP Code -->
+            <div class="otp-code">
+                <h1>{{otp}}</h1>
+                <p>Sign-in Verification Code</p>
+            </div>
+
+            <p class="expiry-notice">
+                This code will expire in <strong>10 minutes</strong>. If you didn't attempt to sign in,
+                please secure your account immediately by changing your password.
+            </p>
+
+            <!-- Security Tip -->
+            <div class="security-tip">
                 <p>
-                    <strong>✅ Account Verified:</strong> Your email address has been confirmed and your account is now
-                    fully active.
+                    <strong>Security Alert:</strong> If you didn't request this code, someone may be trying to access your account.
+                    Please ignore this email and consider changing your password.
                 </p>
             </div>
 
-            <h3 class="next-steps-title">What's Next?</h3>
-            <ul class="next-steps-list">
-                <li>Complete your profile to get personalized recommendations</li>
-                <li>Explore courses and educational resources</li>
-                <li>Connect with other educators and learners</li>
-                <li>Start your learning journey today!</li>
-            </ul>
-
-            <!-- Call to Action -->
-            <div class="cta-section">
-                <a href="{{frontendUrl}}/dashboard" class="cta-button">
-                    Get Started Now
-                </a>
-            </div>
-
             <p class="signature">
-                Best regards,<br>
+                Stay secure,<br>
                 <strong>The Educate Global Hub Team</strong>
             </p>
         </div>

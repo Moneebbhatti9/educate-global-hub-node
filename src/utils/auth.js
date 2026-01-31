@@ -5,22 +5,106 @@ const dayjs = require("dayjs");
 const User = require("../models/User");
 const OTPCode = require("../models/OTPCode");
 const RefreshToken = require("../models/RefreshToken");
+const Session = require("../models/Session");
 
-// Generate JWT tokens
-const generateTokens = (userId, email, role) => {
+// Inactivity timeout (30 minutes)
+const INACTIVITY_TIMEOUT_MS = parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_MS) || 30 * 60 * 1000;
+
+// Generate JWT tokens with optional sessionId
+const generateTokens = (userId, email, role, sessionId = null) => {
+  const accessTokenPayload = { userId, email, role };
+  const refreshTokenPayload = { userId, email, role };
+
+  // Include sessionId if provided
+  if (sessionId) {
+    accessTokenPayload.sessionId = sessionId;
+    refreshTokenPayload.sessionId = sessionId;
+  }
+
   const accessToken = jwt.sign(
-    { userId, email, role },
+    accessTokenPayload,
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "15m" }
   );
 
   const refreshToken = jwt.sign(
-    { userId, email, role },
+    refreshTokenPayload,
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d" }
   );
 
   return { accessToken, refreshToken };
+};
+
+// Parse user agent string to extract device info
+const parseUserAgent = (userAgent) => {
+  if (!userAgent) {
+    return {
+      userAgent: "Unknown",
+      browser: "Unknown",
+      os: "Unknown",
+      device: "Unknown",
+      isMobile: false,
+    };
+  }
+
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent);
+  let browser = "Unknown";
+  let os = "Unknown";
+  let device = isMobile ? "Mobile" : "Desktop";
+
+  // Detect browser
+  if (userAgent.includes("Chrome") && !userAgent.includes("Edge")) {
+    browser = "Chrome";
+  } else if (userAgent.includes("Firefox")) {
+    browser = "Firefox";
+  } else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) {
+    browser = "Safari";
+  } else if (userAgent.includes("Edge")) {
+    browser = "Edge";
+  } else if (userAgent.includes("Opera") || userAgent.includes("OPR")) {
+    browser = "Opera";
+  }
+
+  // Detect OS
+  if (userAgent.includes("Windows")) {
+    os = "Windows";
+  } else if (userAgent.includes("Mac OS")) {
+    os = "macOS";
+  } else if (userAgent.includes("Linux")) {
+    os = "Linux";
+  } else if (userAgent.includes("Android")) {
+    os = "Android";
+  } else if (userAgent.includes("iOS") || userAgent.includes("iPhone") || userAgent.includes("iPad")) {
+    os = "iOS";
+  }
+
+  return {
+    userAgent,
+    browser,
+    os,
+    device,
+    isMobile,
+  };
+};
+
+// Create a new session
+const createSession = async (userId, refreshTokenId, req) => {
+  const userAgent = req.headers["user-agent"] || "";
+  const ipAddress = req.ip || req.connection?.remoteAddress || "Unknown";
+  const deviceInfo = parseUserAgent(userAgent);
+
+  const session = new Session({
+    userId,
+    refreshTokenId,
+    deviceInfo,
+    ipAddress,
+    expiresAt: new Date(Date.now() + INACTIVITY_TIMEOUT_MS),
+    loginAt: new Date(),
+    lastActivityAt: new Date(),
+  });
+
+  return await session.save();
 };
 
 // Hash password
@@ -211,6 +295,30 @@ const revokeAllRefreshTokens = async (userId) => {
   return await RefreshToken.revokeAllForUser(userId);
 };
 
+// End a user's session
+const endSession = async (sessionId, reason = "user_logout") => {
+  const session = await Session.findById(sessionId);
+  if (session && session.isActive) {
+    return await session.endSession(reason);
+  }
+  return null;
+};
+
+// End all sessions for a user
+const endAllSessions = async (userId, reason = "forced_logout") => {
+  return await Session.endAllSessions(userId, reason);
+};
+
+// End all sessions except current
+const endOtherSessions = async (userId, currentSessionId, reason = "forced_logout") => {
+  return await Session.endOtherSessions(userId, currentSessionId, reason);
+};
+
+// Get all active sessions for a user
+const getActiveSessions = async (userId) => {
+  return await Session.getActiveSessions(userId);
+};
+
 module.exports = {
   generateTokens,
   hashPassword,
@@ -228,4 +336,12 @@ module.exports = {
   verifyRefreshToken,
   revokeRefreshToken,
   revokeAllRefreshTokens,
+  // Session management
+  parseUserAgent,
+  createSession,
+  endSession,
+  endAllSessions,
+  endOtherSessions,
+  getActiveSessions,
+  INACTIVITY_TIMEOUT_MS,
 };

@@ -96,6 +96,19 @@ const validationSchemas = {
     }),
   }),
 
+  // Verify 2FA OTP for login
+  verify2FA: Joi.object({
+    email: Joi.string().email().required().messages({
+      "string.email": "Please provide a valid email address",
+      "any.required": "Email is required",
+    }),
+    otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
+      "string.length": "Verification code must be exactly 6 digits",
+      "string.pattern.base": "Verification code must contain only numbers",
+      "any.required": "Verification code is required",
+    }),
+  }),
+
   // Password reset request (just email)
   passwordReset: Joi.object({
     email: Joi.string().email().required().messages({

@@ -29,12 +29,17 @@ const createTransporter = () => {
 const emailSubjects = {
   verification: "Verify Your Email - Educate Global Hub",
   passwordReset: "Password Reset Request - Educate Global Hub",
-  welcome: "Welcome to Educate Global Hub! 🎉",
+  welcome: "Welcome to Educate Global Hub!",
   applicationConfirmation:
     "Application Submitted Successfully - Educate Global Hub",
   newApplicationNotification:
     "New Job Application Received - Educate Global Hub",
   resourceApprovalRejection: "Resource Status Update - Educate Global Hub",
+  twoFactorAuth: "Your Verification Code - Educate Global Hub",
+  kycSubmitted: "KYC Documents Received - Educate Global Hub",
+  kycApproved: "KYC Approved - Welcome to Educate Global Hub!",
+  kycRejected: "KYC Review Update - Action Required",
+  kycResubmission: "KYC Resubmission Required - Educate Global Hub",
 };
 
 // Send email function
@@ -116,6 +121,59 @@ const sendResourceStatusUpdateEmail = async (
 
   return await sendEmail(email, emailSubjects.resourceApprovalRejection, html);
 };
+
+// Send 2FA verification email
+const send2FAEmail = async (email, userName, otp) => {
+  const html = await getEmailTemplate("two-factor-auth", {
+    userName,
+    otp,
+  });
+
+  return await sendEmail(email, emailSubjects.twoFactorAuth, html);
+};
+
+// Send KYC submission confirmation email
+const sendKYCSubmittedEmail = async (email, userName) => {
+  const html = await getEmailTemplate("kyc-submitted", {
+    userName,
+    frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+  });
+
+  return await sendEmail(email, emailSubjects.kycSubmitted, html);
+};
+
+// Send KYC approved email
+const sendKYCApprovedEmail = async (email, userName) => {
+  const html = await getEmailTemplate("kyc-approved", {
+    userName,
+    frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+  });
+
+  return await sendEmail(email, emailSubjects.kycApproved, html);
+};
+
+// Send KYC rejected email
+const sendKYCRejectedEmail = async (email, userName, reason) => {
+  const html = await getEmailTemplate("kyc-rejected", {
+    userName,
+    reason,
+    frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+  });
+
+  return await sendEmail(email, emailSubjects.kycRejected, html);
+};
+
+// Send KYC resubmission required email
+const sendKYCResubmissionEmail = async (email, userName, reason) => {
+  const html = await getEmailTemplate("kyc-resubmission", {
+    userName,
+    reason,
+    frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+  });
+
+  return await sendEmail(email, emailSubjects.kycResubmission, html);
+};
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -124,4 +182,9 @@ module.exports = {
   sendApplicationConfirmationEmail,
   sendNewApplicationNotificationEmail,
   sendResourceStatusUpdateEmail,
+  send2FAEmail,
+  sendKYCSubmittedEmail,
+  sendKYCApprovedEmail,
+  sendKYCRejectedEmail,
+  sendKYCResubmissionEmail,
 };
