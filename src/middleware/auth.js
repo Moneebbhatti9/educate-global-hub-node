@@ -1,11 +1,15 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Session = require("../models/Session");
 const {
   unauthorizedResponse,
   forbiddenResponse,
 } = require("../utils/response");
 
-// Authenticate JWT token
+// Inactivity timeout in milliseconds (30 minutes)
+const INACTIVITY_TIMEOUT_MS = parseInt(process.env.SESSION_INACTIVITY_TIMEOUT_MS) || 30 * 60 * 1000;
+
+// Authenticate JWT token with session tracking
 const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers["authorization"];
@@ -23,6 +27,37 @@ const authenticateToken = async (req, res, next) => {
       return unauthorizedResponse(res, "User not found");
     }
 
+    // Check if account is locked
+    if (user.isAccountLocked && user.isAccountLocked()) {
+      return unauthorizedResponse(res, "Account is temporarily locked. Please try again later.");
+    }
+
+    // Check for active session and update activity
+    if (decoded.sessionId) {
+      const session = await Session.findById(decoded.sessionId);
+      if (session) {
+        // Check if session is still active
+        if (!session.isActive) {
+          return unauthorizedResponse(res, "Session has been terminated. Please sign in again.");
+        }
+
+        // Check for inactivity timeout
+        if (session.hasTimedOut(INACTIVITY_TIMEOUT_MS)) {
+          // End the session due to inactivity
+          await session.endSession("inactivity_timeout");
+          return unauthorizedResponse(res, "Session expired due to inactivity. Please sign in again.");
+        }
+
+        // Update last activity timestamp
+        await session.updateActivity();
+        req.sessionId = session._id;
+      }
+    }
+
+    // Update user's last active timestamp
+    user.lastActive = new Date();
+    await user.save({ validateBeforeSave: false });
+
     // Attach user info to request
     req.user = {
       userId: user._id,
@@ -38,9 +73,6 @@ const authenticateToken = async (req, res, next) => {
       }).select("_id");
       if (schoolProfile) {
         req.user.schoolId = schoolProfile._id;
-        console.log("School profile found:", schoolProfile._id);
-      } else {
-        console.log("No school profile found for user:", user._id);
       }
     }
 
@@ -190,6 +222,50 @@ const checkUserStatus = async (req, res, next) => {
   }
 };
 
+// Require KYC approval for certain actions
+const requireKYCApproval = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return unauthorizedResponse(res, "Authentication required");
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return unauthorizedResponse(res, "User not found");
+    }
+
+    // Only check KYC for teachers and schools
+    if (user.role === "teacher" || user.role === "school") {
+      if (user.kycStatus !== "approved") {
+        return forbiddenResponse(res, "KYC verification required to perform this action");
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Middleware to check session validity
+const validateSession = async (req, res, next) => {
+  try {
+    if (!req.sessionId) {
+      // No session tracking for this request, continue
+      return next();
+    }
+
+    const session = await Session.findById(req.sessionId);
+    if (!session || !session.isActive) {
+      return unauthorizedResponse(res, "Invalid or expired session");
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   authenticateToken,
   optionalAuth,
@@ -197,4 +273,7 @@ module.exports = {
   requireEmailVerification,
   requireProfileCompletion,
   checkUserStatus,
+  requireKYCApproval,
+  validateSession,
+  INACTIVITY_TIMEOUT_MS,
 };

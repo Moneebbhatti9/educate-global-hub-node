@@ -289,6 +289,65 @@ const deleteAccount = async (req, res, next) => {
   }
 };
 
+// Update 2FA settings controller
+const update2FASettings = async (req, res, next) => {
+  try {
+    const { is2FAEnabled, twoFactorMethod } = req.body;
+    const userId = req.user.userId;
+
+    // Validate input
+    if (typeof is2FAEnabled !== "boolean") {
+      return validationErrorResponse(res, "is2FAEnabled must be a boolean value");
+    }
+
+    // Build update object
+    const updateFields = { is2FAEnabled };
+
+    // If enabling 2FA, optionally set the method
+    if (is2FAEnabled && twoFactorMethod) {
+      const validMethods = ["email", "sms"];
+      if (!validMethods.includes(twoFactorMethod)) {
+        return validationErrorResponse(res, "Invalid 2FA method. Must be 'email' or 'sms'");
+      }
+      updateFields.twoFactorMethod = twoFactorMethod;
+    }
+
+    // Update user
+    const user = await User.findByIdAndUpdate(userId, updateFields, { new: true });
+
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
+    return updatedResponse(res, "2FA settings updated successfully", {
+      is2FAEnabled: user.is2FAEnabled,
+      twoFactorMethod: user.twoFactorMethod,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get 2FA settings controller
+const get2FASettings = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    const user = await User.findById(userId).select("is2FAEnabled twoFactorMethod");
+
+    if (!user) {
+      return notFoundResponse(res, "User not found");
+    }
+
+    return successResponse(res, {
+      is2FAEnabled: user.is2FAEnabled,
+      twoFactorMethod: user.twoFactorMethod,
+    }, "2FA settings retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   completeProfile,
   updateProfile,
@@ -297,4 +356,6 @@ module.exports = {
   getUsers,
   updateAvatar,
   deleteAccount,
+  update2FASettings,
+  get2FASettings,
 };

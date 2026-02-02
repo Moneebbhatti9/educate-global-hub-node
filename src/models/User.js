@@ -42,6 +42,51 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // KYC status tracking
+    kycStatus: {
+      type: String,
+      enum: ["not_submitted", "pending", "under_review", "approved", "rejected", "resubmission_required"],
+      default: "not_submitted",
+    },
+    kycSubmittedAt: {
+      type: Date,
+      default: null,
+    },
+    kycApprovedAt: {
+      type: Date,
+      default: null,
+    },
+    kycRejectionReason: {
+      type: String,
+      default: null,
+    },
+    // 2FA settings
+    is2FAEnabled: {
+      type: Boolean,
+      default: true, // Enabled by default for all users
+    },
+    twoFactorMethod: {
+      type: String,
+      enum: ["email", "sms"],
+      default: "email",
+    },
+    // Session management
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    lastLoginIp: {
+      type: String,
+      default: null,
+    },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    accountLockedUntil: {
+      type: Date,
+      default: null,
+    },
     avatarUrl: {
       type: String,
       default: null,
@@ -106,6 +151,8 @@ userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ isEmailVerified: 1 });
 userSchema.index({ lastActive: 1 });
+userSchema.index({ kycStatus: 1 });
+userSchema.index({ lastLoginAt: 1 });
 
 // Virtual for full name
 userSchema.virtual("fullName").get(function () {
@@ -123,6 +170,14 @@ userSchema.virtual("teacherProfile", {
 // Virtual populate for school profile
 userSchema.virtual("schoolProfile", {
   ref: "SchoolProfile",
+  localField: "_id",
+  foreignField: "userId",
+  justOne: true,
+});
+
+// Virtual populate for KYC submission
+userSchema.virtual("kycSubmission", {
+  ref: "KYCSubmission",
   localField: "_id",
   foreignField: "userId",
   justOne: true,
@@ -165,6 +220,44 @@ userSchema.methods.toSafeObject = function () {
   const user = this.toObject();
   delete user.passwordHash;
   return user;
+};
+
+// Method to check if account is locked
+userSchema.methods.isAccountLocked = function () {
+  if (!this.accountLockedUntil) return false;
+  return new Date() < this.accountLockedUntil;
+};
+
+// Method to increment failed login attempts
+userSchema.methods.incrementFailedAttempts = async function () {
+  this.failedLoginAttempts += 1;
+  // Lock account after 5 failed attempts for 30 minutes
+  if (this.failedLoginAttempts >= 5) {
+    this.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000);
+  }
+  return this.save();
+};
+
+// Method to reset failed login attempts
+userSchema.methods.resetFailedAttempts = async function () {
+  this.failedLoginAttempts = 0;
+  this.accountLockedUntil = null;
+  this.lastLoginAt = new Date();
+  return this.save();
+};
+
+// Method to update KYC status
+userSchema.methods.updateKYCStatus = async function (status, reason = null) {
+  this.kycStatus = status;
+  if (status === "pending" || status === "under_review") {
+    this.kycSubmittedAt = this.kycSubmittedAt || new Date();
+  } else if (status === "approved") {
+    this.kycApprovedAt = new Date();
+    this.kycRejectionReason = null;
+  } else if (status === "rejected" || status === "resubmission_required") {
+    this.kycRejectionReason = reason;
+  }
+  return this.save();
 };
 
 module.exports = mongoose.model("User", userSchema);

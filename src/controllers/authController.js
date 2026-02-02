@@ -17,7 +17,13 @@ const {
   storeRefreshToken,
   verifyRefreshToken,
   revokeAllRefreshTokens,
+  createSession,
+  endSession,
+  endAllSessions,
+  endOtherSessions,
+  getActiveSessions,
 } = require("../utils/auth");
+const Session = require("../models/Session");
 const {
   successResponse,
   errorResponse,
@@ -74,13 +80,27 @@ const signup = async (req, res, next) => {
   }
 };
 
-// Login controller
+// Login controller - Step 1: Validate credentials and send 2FA OTP
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
+
+    // Check if account is locked
+    if (user && user.isAccountLocked()) {
+      const lockTimeRemaining = Math.ceil((user.accountLockedUntil - new Date()) / 60000);
+      return unauthorizedResponse(
+        res,
+        `Account is locked due to too many failed attempts. Try again in ${lockTimeRemaining} minutes.`
+      );
+    }
+
     if (!user || !(await comparePassword(password, user.passwordHash))) {
+      // Increment failed attempts if user exists
+      if (user) {
+        await user.incrementFailedAttempts();
+      }
       return unauthorizedResponse(res, "Invalid email or password");
     }
 
@@ -92,39 +112,117 @@ const login = async (req, res, next) => {
       );
     }
 
-    // Check user status for non-admin/teacher users
-    if (user.role !== "admin" && user.role !== "teacher") {
-      if (user.status !== "active") {
-        return unauthorizedResponse(
-          res,
-          "Your account is not active. Please contact support."
-        );
+    // Check if 2FA is enabled (default: true for all users)
+    if (user.is2FAEnabled) {
+      // Generate and send 2FA OTP
+      const otp = generateOTP();
+      await storeOTP(email, otp, "signin");
+
+      try {
+        await emailService.send2FAEmail(email, user.firstName, otp);
+      } catch (emailError) {
+        console.error("Failed to send 2FA email:", emailError);
+        return errorResponse(res, "Failed to send verification code", 500);
       }
+
+      return successResponse(
+        res,
+        {
+          requires2FA: true,
+          email: user.email,
+          method: user.twoFactorMethod,
+        },
+        "Verification code sent to your email"
+      );
     }
 
-    const { accessToken, refreshToken } = generateTokens(
-      user._id,
-      user.email,
-      user.role
-    );
-
-    // Store refresh token
-    const refreshTokenHash = await hashPassword(refreshToken);
-    const expiresAt = dayjs().add(7, "day").toDate();
-    await storeRefreshToken(user._id, refreshTokenHash, expiresAt);
-
-    return successResponse(
-      res,
-      {
-        user: sanitizeUser(user),
-        accessToken,
-        refreshToken,
-      },
-      "Login successful"
-    );
+    // If 2FA is disabled, proceed with login
+    return await completeLogin(user, req, res);
   } catch (error) {
     next(error);
   }
+};
+
+// Login controller - Step 2: Verify 2FA OTP and complete login
+const verify2FALogin = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return unauthorizedResponse(res, "User not found");
+    }
+
+    // Check if account is locked
+    if (user.isAccountLocked()) {
+      const lockTimeRemaining = Math.ceil((user.accountLockedUntil - new Date()) / 60000);
+      return unauthorizedResponse(
+        res,
+        `Account is locked. Try again in ${lockTimeRemaining} minutes.`
+      );
+    }
+
+    // Verify the 2FA OTP
+    const result = await verifyOTP(email, otp, "signin");
+    if (!result.isValid) {
+      await user.incrementFailedAttempts();
+      return validationErrorResponse(res, result.message);
+    }
+
+    // Complete the login
+    return await completeLogin(user, req, res);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Helper function to complete login after all checks pass
+const completeLogin = async (user, req, res) => {
+  // Reset failed attempts on successful login
+  await user.resetFailedAttempts();
+
+  // Update last login info
+  user.lastLoginIp = req.ip || req.connection.remoteAddress;
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  // Store refresh token first to get the ID for session creation
+  const refreshTokenHash = await hashPassword(
+    `temp_${user._id}_${Date.now()}`
+  );
+  const expiresAt = dayjs().add(7, "day").toDate();
+  const storedRefreshToken = await storeRefreshToken(
+    user._id,
+    refreshTokenHash,
+    expiresAt
+  );
+
+  // Create session with device info
+  const session = await createSession(user._id, storedRefreshToken._id, req);
+
+  // Generate tokens with sessionId included
+  const { accessToken, refreshToken } = generateTokens(
+    user._id,
+    user.email,
+    user.role,
+    session._id
+  );
+
+  // Update the refresh token hash with the actual token
+  const actualRefreshTokenHash = await hashPassword(refreshToken);
+  storedRefreshToken.tokenHash = actualRefreshTokenHash;
+  await storedRefreshToken.save();
+
+  return successResponse(
+    res,
+    {
+      user: sanitizeUser(user),
+      accessToken,
+      refreshToken,
+      sessionId: session._id,
+    },
+    "Login successful"
+  );
 };
 
 // Send OTP controller
@@ -145,6 +243,8 @@ const sendOTP = async (req, res, next) => {
         await emailService.sendVerificationEmail(email, user.firstName, otp);
       } else if (type === "reset") {
         await emailService.sendPasswordResetEmail(email, user.firstName, otp);
+      } else if (type === "signin") {
+        await emailService.send2FAEmail(email, user.firstName, otp);
       }
     } catch (emailError) {
       console.error("Failed to send OTP email:", emailError);
@@ -328,6 +428,12 @@ const refresh = async (req, res, next) => {
 const logout = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
+    const sessionId = req.sessionId;
+
+    // End the current session if exists
+    if (sessionId) {
+      await endSession(sessionId, "user_logout");
+    }
 
     if (refreshToken) {
       // Find and revoke the specific refresh token
@@ -343,6 +449,98 @@ const logout = async (req, res, next) => {
     }
 
     return successResponse(res, null, "Logged out successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Logout from all devices
+const logoutAllDevices = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    // End all sessions for the user
+    await endAllSessions(userId, "forced_logout");
+
+    // Revoke all refresh tokens
+    await revokeAllRefreshTokens(userId);
+
+    return successResponse(res, null, "Logged out from all devices successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get active sessions
+const getActiveSessionsController = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const sessions = await getActiveSessions(userId);
+
+    // Format sessions for response
+    const formattedSessions = sessions.map((session) => ({
+      id: session._id,
+      deviceInfo: session.deviceInfo,
+      ipAddress: session.ipAddress,
+      location: session.location,
+      loginAt: session.loginAt,
+      lastActivityAt: session.lastActivityAt,
+      isCurrent: req.sessionId && session._id.toString() === req.sessionId.toString(),
+    }));
+
+    return successResponse(
+      res,
+      { sessions: formattedSessions },
+      "Active sessions retrieved successfully"
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Terminate a specific session
+const terminateSession = async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.userId;
+
+    // Find the session and verify it belongs to the user
+    const session = await Session.findOne({ _id: sessionId, userId });
+    if (!session) {
+      return notFoundResponse(res, "Session not found");
+    }
+
+    if (!session.isActive) {
+      return errorResponse(res, "Session is already terminated", 400);
+    }
+
+    // Don't allow terminating current session via this endpoint
+    if (req.sessionId && session._id.toString() === req.sessionId.toString()) {
+      return errorResponse(res, "Cannot terminate current session. Use logout instead.", 400);
+    }
+
+    await endSession(sessionId, "forced_logout");
+
+    return successResponse(res, null, "Session terminated successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Terminate all other sessions except current
+const terminateOtherSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const currentSessionId = req.sessionId;
+
+    if (!currentSessionId) {
+      return errorResponse(res, "Current session not found", 400);
+    }
+
+    // End all other sessions
+    await endOtherSessions(userId, currentSessionId, "forced_logout");
+
+    return successResponse(res, null, "All other sessions terminated successfully");
   } catch (error) {
     next(error);
   }
@@ -431,6 +629,7 @@ const checkUserStatus = async (req, res, next) => {
     const response = {
       user: sanitizeUser(user),
       redirectTo: null,
+      kycStatus: user.kycStatus,
     };
 
     // Check email verification
@@ -439,15 +638,39 @@ const checkUserStatus = async (req, res, next) => {
       return successResponse(res, response, "Email verification required");
     }
 
-    // Check profile completion first - this takes priority over status
+    // Check profile completion
     if (!user.isProfileComplete) {
       response.redirectTo = "complete-profile";
       return successResponse(res, response, "Profile completion required");
     }
 
-    // Only check user status AFTER profile is complete
-    // Check user status for non-admin/teacher users
-    if (user.role !== "admin" && user.role !== "teacher") {
+    // Check KYC status for teachers and schools
+    if (user.role === "teacher" || user.role === "school") {
+      if (user.kycStatus === "not_submitted") {
+        response.redirectTo = "kyc-submission";
+        return successResponse(res, response, "KYC submission required");
+      }
+
+      if (user.kycStatus === "pending" || user.kycStatus === "under_review") {
+        response.redirectTo = "kyc-pending";
+        return successResponse(res, response, "KYC review pending");
+      }
+
+      if (user.kycStatus === "rejected") {
+        response.redirectTo = "kyc-rejected";
+        response.kycRejectionReason = user.kycRejectionReason;
+        return successResponse(res, response, "KYC was rejected");
+      }
+
+      if (user.kycStatus === "resubmission_required") {
+        response.redirectTo = "kyc-resubmission";
+        response.kycRejectionReason = user.kycRejectionReason;
+        return successResponse(res, response, "KYC resubmission required");
+      }
+    }
+
+    // Check user status for non-admin users
+    if (user.role !== "admin") {
       if (user.status !== "active") {
         response.redirectTo = "pending-approval";
         return successResponse(res, response, "Account pending approval");
@@ -504,14 +727,19 @@ const completeProfile = async (req, res, next) => {
 module.exports = {
   signup,
   login,
+  verify2FALogin,
   sendOTP,
   verifyOTPController,
   passwordReset,
   passwordResetConfirm,
   refresh,
   logout,
+  logoutAllDevices,
   getCurrentUser,
   changePassword,
   checkUserStatus,
   completeProfile,
+  getActiveSessionsController,
+  terminateSession,
+  terminateOtherSessions,
 };
