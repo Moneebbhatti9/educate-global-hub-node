@@ -13,6 +13,8 @@ const {
   getUsers,
   updateAvatar,
   deleteAccount,
+  update2FASettings,
+  get2FASettings,
 } = require("../controllers/userController");
 
 const router = express.Router();
@@ -47,6 +49,26 @@ router.get(
   authenticateToken,
   requireEmailVerification,
   getCurrentUserProfile
+);
+
+// @route   GET /api/v1/users/2fa-settings
+// @desc    Get user 2FA settings
+// @access  Private
+router.get(
+  "/2fa-settings",
+  authenticateToken,
+  requireEmailVerification,
+  get2FASettings
+);
+
+// @route   PUT /api/v1/users/2fa-settings
+// @desc    Update user 2FA settings
+// @access  Private
+router.put(
+  "/2fa-settings",
+  authenticateToken,
+  requireEmailVerification,
+  update2FASettings
 );
 
 // @route   GET /api/v1/users/:id

@@ -81,6 +81,12 @@ const validationSchemas = {
       "string.email": "Please provide a valid email address",
       "any.required": "Email is required",
     }),
+    type: Joi.string()
+      .valid("verification", "reset", "signin")
+      .default("verification")
+      .messages({
+        "any.only": "Type must be one of: verification, reset, signin",
+      }),
   }),
 
   // Verify OTP
@@ -94,6 +100,12 @@ const validationSchemas = {
       "string.pattern.base": "OTP must contain only numbers",
       "any.required": "OTP is required",
     }),
+    type: Joi.string()
+      .valid("verification", "reset", "signin")
+      .default("verification")
+      .messages({
+        "any.only": "Type must be one of: verification, reset, signin",
+      }),
   }),
 
   // Verify 2FA OTP for login
