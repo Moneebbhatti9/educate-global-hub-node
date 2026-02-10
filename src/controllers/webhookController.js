@@ -1120,8 +1120,14 @@ async function handleInvoicePaymentSucceeded(event) {
       return;
     }
 
-    // Update status to active and reset usage
+    // Retrieve updated subscription from Stripe to get accurate period dates
+    const { stripe } = require("../config/stripe");
+    const stripeSubscription = await stripe.subscriptions.retrieve(invoice.subscription);
+
+    // Update status to active, update billing period dates, and reset usage
     userSubscription.status = "active";
+    userSubscription.currentPeriodStart = new Date(stripeSubscription.current_period_start * 1000);
+    userSubscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
 
     // Reset usage counters for new billing period
     userSubscription.usage = {
@@ -1140,18 +1146,26 @@ async function handleInvoicePaymentSucceeded(event) {
       const user = await User.findById(userSubscription.userId);
       const plan = await SubscriptionPlan.findById(userSubscription.planId);
 
+      // Calculate next billing date with fallback
+      const nextBillingTimestamp =
+        invoice.lines?.data?.[0]?.period?.end ||
+        stripeSubscription.current_period_end;
+      const nextBillingDate = nextBillingTimestamp
+        ? new Date(nextBillingTimestamp * 1000).toLocaleDateString()
+        : "your next billing date";
+
       if (user && user.email) {
         await emailService.sendSubscriptionRenewedNotification(user.email, user.firstName, {
           planName: plan ? plan.name : "your subscription",
           amount: `£${(invoice.amount_paid / 100).toFixed(2)}`,
-          nextBillingDate: new Date(invoice.lines.data[0]?.period?.end * 1000).toLocaleDateString(),
+          nextBillingDate,
         });
       }
     } catch (emailError) {
       console.error("Failed to send renewal confirmation email:", emailError);
     }
 
-    console.log(`✅ Subscription ${invoice.subscription} renewed successfully`);
+    console.log(`✅ Subscription ${invoice.subscription} renewed until ${userSubscription.currentPeriodEnd}`);
   } catch (error) {
     await WebhookEvent.markFailed(event.id, error.message);
     throw error;
