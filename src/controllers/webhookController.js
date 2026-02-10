@@ -126,6 +126,7 @@ async function handleStripeWebhook(req, res, next) {
  */
 async function handleCheckoutSessionCompleted(session) {
   console.log(`✅ Checkout session completed: ${session.id}`);
+  console.log(`🔍 [DEBUG] Session mode: "${session.mode}", routing to ${session.mode === "subscription" ? "subscription" : "payment"} handler`);
 
   try {
     // Check if this is a subscription checkout
@@ -667,14 +668,17 @@ async function handleExternalAccountCreated(externalAccount) {
  */
 async function handleSubscriptionCheckoutCompleted(session) {
   console.log(`✅ Subscription checkout completed: ${session.id}`);
+  console.log(`🔍 [DEBUG] Session mode: ${session.mode}, subscription: ${session.subscription}, customer: ${session.customer}`);
+  console.log(`🔍 [DEBUG] Session metadata:`, JSON.stringify(session.metadata));
 
   try {
     const { userId, planId, planName, userEmail } = session.metadata || {};
 
     if (!userId || !planId) {
-      console.error("Missing userId or planId in subscription checkout metadata:", session.metadata);
+      console.error("❌ [DEBUG] Missing userId or planId in subscription checkout metadata:", session.metadata);
       return;
     }
+    console.log(`🔍 [DEBUG] Extracted userId: ${userId}, planId: ${planId}`);
 
     // Check for idempotency - don't process same checkout twice
     const existingSubscription = await UserSubscription.findOne({
@@ -683,20 +687,23 @@ async function handleSubscriptionCheckoutCompleted(session) {
     });
 
     if (existingSubscription) {
-      console.log(`Subscription already exists for session ${session.id}`);
+      console.log(`⏩ [DEBUG] Subscription already exists for session ${session.id}, skipping`);
       return;
     }
 
     // Get the Stripe subscription details
     const { stripe } = require("../config/stripe");
+    console.log(`🔍 [DEBUG] Retrieving Stripe subscription: ${session.subscription}`);
     const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+    console.log(`🔍 [DEBUG] Stripe subscription status: ${stripeSubscription.status}, items count: ${stripeSubscription.items?.data?.length}`);
 
     // Get the plan
     const plan = await SubscriptionPlan.findById(planId);
     if (!plan) {
-      console.error(`Subscription plan not found: ${planId}`);
+      console.error(`❌ [DEBUG] Subscription plan not found for planId: ${planId}`);
       return;
     }
+    console.log(`🔍 [DEBUG] Found plan: ${plan.name} (${plan._id})`);
 
     // Determine subscription status
     let status = "active";
@@ -706,16 +713,25 @@ async function handleSubscriptionCheckoutCompleted(session) {
       status = "past_due";
     }
 
+    // Extract period dates - Stripe API 2025-09-30 moved these to items.data[0]
+    const periodStart = stripeSubscription.current_period_start
+      || stripeSubscription.items?.data?.[0]?.current_period_start
+      || stripeSubscription.start_date;
+    const periodEnd = stripeSubscription.current_period_end
+      || stripeSubscription.items?.data?.[0]?.current_period_end;
+    console.log(`🔍 [DEBUG] Period dates - start: ${periodStart}, end: ${periodEnd}, status: ${status}`);
+
     // Create user subscription record
+    console.log(`🔍 [DEBUG] Creating UserSubscription record...`);
     const userSubscription = await UserSubscription.create({
       userId: new mongoose.Types.ObjectId(userId),
       planId: new mongoose.Types.ObjectId(planId),
       status,
       stripeSubscriptionId: session.subscription,
       stripeCustomerId: session.customer,
-      startDate: new Date(stripeSubscription.current_period_start * 1000),
-      currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+      startDate: new Date(periodStart * 1000),
+      currentPeriodStart: new Date(periodStart * 1000),
+      currentPeriodEnd: new Date(periodEnd * 1000),
       trialEndDate: stripeSubscription.trial_end
         ? new Date(stripeSubscription.trial_end * 1000)
         : null,
@@ -743,7 +759,7 @@ async function handleSubscriptionCheckoutCompleted(session) {
           planName: planName || plan.name,
           amount: `£${((session.amount_total || 0) / 100).toFixed(2)}`,
           nextBillingDate: new Date(
-            stripeSubscription.current_period_end * 1000
+            periodEnd * 1000
           ).toLocaleDateString(),
           isTrialing: status === "trial",
           trialEndDate: stripeSubscription.trial_end
@@ -775,7 +791,7 @@ async function handleSubscriptionCheckoutCompleted(session) {
       console.error("Failed to create subscription notification:", notificationError);
     }
   } catch (error) {
-    console.error("Error handling subscription checkout completed:", error);
+    console.error("❌ [DEBUG] Error handling subscription checkout completed:", error.message, error.stack);
     throw error;
   }
 }
@@ -786,16 +802,18 @@ async function handleSubscriptionCheckoutCompleted(session) {
 async function handleSubscriptionCreated(event) {
   const subscription = event.data.object;
   console.log(`📝 Subscription created: ${subscription.id}`);
+  console.log(`🔍 [DEBUG] subscription.customer: ${subscription.customer}, subscription.metadata:`, JSON.stringify(subscription.metadata));
 
   // Record event for idempotency
   const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: subscription.id,
     customerId: subscription.customer,
   });
+  console.log(`🔍 [DEBUG] Idempotency check - isNew: ${isNew}, processingResult: ${webhookEvt?.processingResult}`);
 
   // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
   if (!isNew && webhookEvt?.processingResult === "success") {
-    console.log(`Event ${event.id} already successfully processed, skipping`);
+    console.log(`⏩ [DEBUG] Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
@@ -807,34 +825,47 @@ async function handleSubscriptionCreated(event) {
     });
 
     if (existingSubscription) {
-      console.log(`Subscription ${subscription.id} already tracked`);
+      console.log(`⏩ [DEBUG] Subscription ${subscription.id} already tracked in DB`);
       await WebhookEvent.markProcessed(event.id);
       return;
     }
+    console.log(`🔍 [DEBUG] No existing subscription found, proceeding to create...`);
 
     // If we don't have this subscription, we need to find the user by customer ID
     const user = await User.findOne({ stripeCustomerId: subscription.customer });
 
     if (!user) {
-      console.warn(`No user found for Stripe customer: ${subscription.customer}`);
+      console.warn(`❌ [DEBUG] No user found for Stripe customer: ${subscription.customer}`);
       await WebhookEvent.markFailed(event.id, "User not found");
       return;
     }
+    console.log(`🔍 [DEBUG] Found user: ${user.email} (${user._id})`);
 
     // Find the plan by Stripe price ID
     const priceId = subscription.items.data[0]?.price?.id;
+    console.log(`🔍 [DEBUG] Looking up plan by stripePriceId: ${priceId}`);
     const plan = await SubscriptionPlan.findByStripePriceId(priceId);
 
     if (!plan) {
-      console.warn(`No plan found for Stripe price: ${priceId}`);
+      console.warn(`❌ [DEBUG] No plan found for Stripe price: ${priceId}. Checking all plans...`);
+      const allPlans = await SubscriptionPlan.find({}, 'name slug stripePriceId stripeProductId');
+      console.log(`🔍 [DEBUG] All plans in DB:`, JSON.stringify(allPlans));
       await WebhookEvent.markFailed(event.id, "Plan not found");
       return;
     }
+    console.log(`🔍 [DEBUG] Found plan: ${plan.name} (${plan._id})`);
 
     // Create subscription record
     let status = "active";
     if (subscription.status === "trialing") status = "trial";
     else if (subscription.status === "past_due") status = "past_due";
+
+    // Extract period dates - Stripe API 2025-09-30 moved these to items.data[0]
+    const periodStart = subscription.current_period_start
+      || subscription.items?.data?.[0]?.current_period_start
+      || subscription.start_date;
+    const periodEnd = subscription.current_period_end
+      || subscription.items?.data?.[0]?.current_period_end;
 
     await UserSubscription.create({
       userId: user._id,
@@ -842,9 +873,9 @@ async function handleSubscriptionCreated(event) {
       status,
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: subscription.customer,
-      startDate: new Date(subscription.current_period_start * 1000),
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      startDate: new Date(periodStart * 1000),
+      currentPeriodStart: new Date(periodStart * 1000),
+      currentPeriodEnd: new Date(periodEnd * 1000),
       trialEndDate: subscription.trial_end
         ? new Date(subscription.trial_end * 1000)
         : null,
@@ -909,10 +940,17 @@ async function handleSubscriptionUpdated(event) {
         break;
     }
 
+    // Extract period dates - Stripe API 2025-09-30 moved these to items.data[0]
+    const periodStart = subscription.current_period_start
+      || subscription.items?.data?.[0]?.current_period_start
+      || subscription.start_date;
+    const periodEnd = subscription.current_period_end
+      || subscription.items?.data?.[0]?.current_period_end;
+
     // Update subscription
     userSubscription.status = status;
-    userSubscription.currentPeriodStart = new Date(subscription.current_period_start * 1000);
-    userSubscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    userSubscription.currentPeriodStart = new Date(periodStart * 1000);
+    userSubscription.currentPeriodEnd = new Date(periodEnd * 1000);
     userSubscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
 
     if (subscription.canceled_at) {
@@ -1126,10 +1164,17 @@ async function handleInvoicePaymentSucceeded(event) {
     const { stripe } = require("../config/stripe");
     const stripeSubscription = await stripe.subscriptions.retrieve(invoice.subscription);
 
+    // Extract period dates - Stripe API 2025-09-30 moved these to items.data[0]
+    const periodStart = stripeSubscription.current_period_start
+      || stripeSubscription.items?.data?.[0]?.current_period_start
+      || stripeSubscription.start_date;
+    const periodEnd = stripeSubscription.current_period_end
+      || stripeSubscription.items?.data?.[0]?.current_period_end;
+
     // Update status to active, update billing period dates, and reset usage
     userSubscription.status = "active";
-    userSubscription.currentPeriodStart = new Date(stripeSubscription.current_period_start * 1000);
-    userSubscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+    userSubscription.currentPeriodStart = new Date(periodStart * 1000);
+    userSubscription.currentPeriodEnd = new Date(periodEnd * 1000);
 
     // Reset usage counters for new billing period
     userSubscription.usage = {
@@ -1151,7 +1196,7 @@ async function handleInvoicePaymentSucceeded(event) {
       // Calculate next billing date with fallback
       const nextBillingTimestamp =
         invoice.lines?.data?.[0]?.period?.end ||
-        stripeSubscription.current_period_end;
+        periodEnd;
       const nextBillingDate = nextBillingTimestamp
         ? new Date(nextBillingTimestamp * 1000).toLocaleDateString()
         : "your next billing date";
