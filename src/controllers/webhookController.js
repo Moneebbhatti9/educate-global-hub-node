@@ -788,14 +788,14 @@ async function handleSubscriptionCreated(event) {
   console.log(`📝 Subscription created: ${subscription.id}`);
 
   // Record event for idempotency
-  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+  const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: subscription.id,
     customerId: subscription.customer,
   });
 
-  if (!isNew) {
-    console.log(`Event ${event.id} already processed, skipping`);
-    await WebhookEvent.markSkipped(event.id, "Already processed");
+  // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
+  if (!isNew && webhookEvt?.processingResult === "success") {
+    console.log(`Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
@@ -866,14 +866,14 @@ async function handleSubscriptionUpdated(event) {
   console.log(`🔄 Subscription updated: ${subscription.id}`);
 
   // Record event for idempotency
-  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+  const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: subscription.id,
     customerId: subscription.customer,
   });
 
-  if (!isNew) {
-    console.log(`Event ${event.id} already processed, skipping`);
-    await WebhookEvent.markSkipped(event.id, "Already processed");
+  // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
+  if (!isNew && webhookEvt?.processingResult === "success") {
+    console.log(`Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
@@ -955,14 +955,14 @@ async function handleSubscriptionDeleted(event) {
   console.log(`❌ Subscription deleted: ${subscription.id}`);
 
   // Record event for idempotency
-  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+  const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: subscription.id,
     customerId: subscription.customer,
   });
 
-  if (!isNew) {
-    console.log(`Event ${event.id} already processed, skipping`);
-    await WebhookEvent.markSkipped(event.id, "Already processed");
+  // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
+  if (!isNew && webhookEvt?.processingResult === "success") {
+    console.log(`Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
@@ -1031,13 +1031,14 @@ async function handleInvoicePaymentFailed(event) {
   }
 
   // Record event for idempotency
-  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+  const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: invoice.subscription,
     customerId: invoice.customer,
   });
 
-  if (!isNew) {
-    console.log(`Event ${event.id} already processed, skipping`);
+  // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
+  if (!isNew && webhookEvt?.processingResult === "success") {
+    console.log(`Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
@@ -1099,13 +1100,14 @@ async function handleInvoicePaymentSucceeded(event) {
   console.log(`✅ Invoice payment succeeded: ${invoice.id} for subscription ${invoice.subscription}`);
 
   // Record event for idempotency
-  const { isNew } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
+  const { isNew, event: webhookEvt } = await WebhookEvent.recordEvent(event.id, event.type, event.data, {
     subscriptionId: invoice.subscription,
     customerId: invoice.customer,
   });
 
-  if (!isNew) {
-    console.log(`Event ${event.id} already processed, skipping`);
+  // Skip only if already SUCCESSFULLY processed (allow retry for pending/failed)
+  if (!isNew && webhookEvt?.processingResult === "success") {
+    console.log(`Event ${event.id} already successfully processed, skipping`);
     return;
   }
 
