@@ -11,6 +11,8 @@ const JobNotification = require("../models/JobNotification");
 const WebhookEvent = require("../models/WebhookEvent");
 const UserSubscription = require("../models/UserSubscription");
 const SubscriptionPlan = require("../models/SubscriptionPlan");
+const AdRequest = require("../models/AdRequest");
+const AdTier = require("../models/AdTier");
 const { verifyWebhookSignature } = require("../config/stripe");
 const { successResponse, errorResponse } = require("../utils/response");
 const emailService = require("../config/email");
@@ -132,6 +134,12 @@ async function handleCheckoutSessionCompleted(session) {
     // Check if this is a subscription checkout
     if (session.mode === "subscription") {
       await handleSubscriptionCheckoutCompleted(session);
+      return;
+    }
+
+    // Check if this is an ad payment
+    if (session.metadata?.type === "ad_payment") {
+      await handleAdPaymentCompleted(session);
       return;
     }
 
@@ -1215,6 +1223,90 @@ async function handleInvoicePaymentSucceeded(event) {
     console.log(`✅ Subscription ${invoice.subscription} renewed until ${userSubscription.currentPeriodEnd}`);
   } catch (error) {
     await WebhookEvent.markFailed(event.id, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle ad payment completed
+ * Called when a checkout.session.completed event has type=ad_payment in metadata
+ */
+async function handleAdPaymentCompleted(session) {
+  console.log(`📢 Processing ad payment for session: ${session.id}`);
+
+  try {
+    const { ad_request_id } = session.metadata || {};
+
+    if (!ad_request_id) {
+      console.error("No ad_request_id in session metadata");
+      return;
+    }
+
+    const adRequest = await AdRequest.findById(ad_request_id)
+      .populate("tierId")
+      .populate("jobId", "title");
+
+    if (!adRequest) {
+      console.error(`Ad request not found: ${ad_request_id}`);
+      return;
+    }
+
+    if (adRequest.status === "ACTIVE") {
+      console.log(`Ad request ${ad_request_id} already active, skipping`);
+      return;
+    }
+
+    // Calculate expiration date
+    const now = new Date();
+    const tier = adRequest.tierId;
+    const durationDays = tier?.durationDays || 30;
+    const expiresAt = durationDays > 0
+      ? new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
+      : null; // Per-listing ads don't expire by time
+
+    // Update ad request
+    adRequest.status = "ACTIVE";
+    adRequest.stripeSessionId = session.id;
+    adRequest.stripePaymentIntentId = session.payment_intent;
+    adRequest.paidAmount = mongoose.Types.Decimal128.fromString(
+      String(session.amount_total || 0)
+    );
+    adRequest.paidCurrency = (session.currency || "gbp").toUpperCase();
+    adRequest.paidAt = now;
+    adRequest.activatedAt = now;
+    adRequest.expiresAt = expiresAt;
+    await adRequest.save();
+
+    console.log(`✅ Ad request ${ad_request_id} activated successfully`);
+
+    // Notify school - ad is now live
+    await JobNotification.create({
+      userId: adRequest.schoolId,
+      jobId: adRequest.jobId?._id,
+      type: "ad_activated",
+      title: "Your Ad is Now Live!",
+      message: `Your ad for "${adRequest.jobId?.title}" is now active${expiresAt ? ` and will run until ${expiresAt.toLocaleDateString("en-GB")}` : ""}.`,
+      priority: "medium",
+      category: "advertisement",
+      actionUrl: "/dashboard/school/my-advertisements",
+      actionText: "View My Ads",
+    });
+
+    // Notify admins about payment
+    const admins = await User.find({ role: "admin" }).select("_id");
+    for (const admin of admins) {
+      await JobNotification.create({
+        userId: admin._id,
+        jobId: adRequest.jobId?._id,
+        type: "ad_payment_completed",
+        title: "Ad Payment Received",
+        message: `Payment received for ad request "${adRequest.jobId?.title}". Ad is now active.`,
+        priority: "low",
+        category: "advertisement",
+      });
+    }
+  } catch (error) {
+    console.error("Error handling ad payment:", error);
     throw error;
   }
 }

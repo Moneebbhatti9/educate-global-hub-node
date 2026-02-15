@@ -40,7 +40,9 @@ const adminSettingsRoutes = require("./routes/adminSettings");
 const dropdownRoutes = require("./routes/dropdowns");
 const subscriptionRoutes = require("./routes/subscriptions");
 const adminSubscriptionRoutes = require("./routes/adminSubscriptions");
+const adRoutes = require("./routes/ads");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
+const { startAdCron, stopAdCron } = require("./services/adCronService");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -184,11 +186,15 @@ app.use(`/api/${apiVersion}/admin/settings`, adminSettingsRoutes);
 app.use(`/api/${apiVersion}/dropdowns`, dropdownRoutes);
 app.use(`/api/${apiVersion}/subscriptions`, subscriptionRoutes);
 app.use(`/api/${apiVersion}/admin/subscriptions`, adminSubscriptionRoutes);
+app.use(`/api/${apiVersion}/ads`, adRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api/${apiVersion}`);
+
+  // Start ad expiration cron job
+  startAdCron();
 });
 
 const io = socketIo(server, {
@@ -259,11 +265,13 @@ applyErrorMiddlewares(app);
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down gracefully");
+  stopAdCron();
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
   console.log("SIGINT received, shutting down gracefully");
+  stopAdCron();
   process.exit(0);
 });
 

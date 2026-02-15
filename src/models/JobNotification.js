@@ -33,6 +33,14 @@ const jobNotificationSchema = new mongoose.Schema(
         "profile_viewed",
         "job_recommendation",
         "system_alert",
+        "ad_request_submitted",
+        "ad_request_approved",
+        "ad_request_rejected",
+        "ad_request_changes",
+        "ad_request_resubmitted",
+        "ad_payment_completed",
+        "ad_activated",
+        "ad_expired",
       ],
     },
     title: {
@@ -52,7 +60,7 @@ const jobNotificationSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["job", "application", "reminder", "system", "recommendation"],
+      enum: ["job", "application", "reminder", "system", "recommendation", "advertisement"],
       required: true,
     },
     isRead: {

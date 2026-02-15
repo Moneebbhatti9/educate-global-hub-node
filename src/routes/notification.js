@@ -194,6 +194,39 @@ router.put("/read-all", authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   PATCH /api/v1/notifications/mark-read
+ * @desc    Batch mark notifications as read/unread
+ * @access  Private
+ */
+router.patch("/mark-read", authenticateToken, async (req, res) => {
+  try {
+    const { notificationIds, isRead } = req.body;
+    const userId = req.user.userId;
+
+    if (!notificationIds || !Array.isArray(notificationIds) || notificationIds.length === 0) {
+      return errorResponse(res, "notificationIds array is required", 400);
+    }
+
+    const update = isRead
+      ? { isRead: true, readAt: new Date() }
+      : { isRead: false, $unset: { readAt: "" } };
+
+    const result = await JobNotification.updateMany(
+      { _id: { $in: notificationIds }, userId },
+      update
+    );
+
+    return successResponse(res, {
+      message: `${result.modifiedCount} notification(s) updated`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error batch marking notifications:", error);
+    return errorResponse(res, "Failed to update notifications", 500);
+  }
+});
+
+/**
  * @route   GET /api/v1/notifications/:id
  * @desc    Get a specific notification by ID
  * @access  Private
