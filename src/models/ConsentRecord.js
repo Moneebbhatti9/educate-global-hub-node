@@ -28,6 +28,7 @@ const consentRecordSchema = new mongoose.Schema(
         "rectification_request",
         "deletion_request",
         "profile_visibility",
+        "talent_pool",
         "newsletter",
         "other",
       ],
@@ -117,6 +118,7 @@ consentRecordSchema.index({ userId: 1, consentType: 1 });
 consentRecordSchema.index({ userId: 1, timestamp: -1 });
 consentRecordSchema.index({ consentType: 1, action: 1 });
 consentRecordSchema.index({ timestamp: -1 });
+consentRecordSchema.index({ userId: 1, consentType: 1, isActive: 1, expiresAt: 1 });
 
 // Method to get latest consent for a user and type
 consentRecordSchema.statics.getLatestConsent = async function (userId, consentType) {
