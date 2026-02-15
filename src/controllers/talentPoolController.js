@@ -1,5 +1,7 @@
 const ConsentRecord = require("../models/ConsentRecord");
 const TeacherProfile = require("../models/TeacherProfile");
+const SavedTeacher = require("../models/SavedTeacher");
+const JobNotification = require("../models/JobNotification");
 const {
   successResponse,
   errorResponse,
@@ -305,10 +307,219 @@ const searchTalentPool = async (req, res) => {
   }
 };
 
+/**
+ * POST /invite
+ * School invites a talent pool teacher to apply (creates non-blocking notification)
+ */
+const inviteToApply = async (req, res) => {
+  try {
+    // Role check - only schools can invite
+    if (req.user.role !== "school") {
+      return errorResponse(res, "Only schools can invite teachers", 403);
+    }
+
+    const { teacherProfileId, jobId, message } = req.body;
+
+    if (!teacherProfileId) {
+      return errorResponse(res, "teacherProfileId is required", 400);
+    }
+
+    // Validate teacher profile exists
+    const teacherProfile = await TeacherProfile.findById(teacherProfileId)
+      .select("userId")
+      .lean();
+
+    if (!teacherProfile) {
+      return errorResponse(res, "Teacher profile not found", 404);
+    }
+
+    // Verify teacher has active talent pool consent
+    const hasConsent = await ConsentRecord.hasActiveConsent(
+      teacherProfile.userId,
+      "talent_pool"
+    );
+
+    if (!hasConsent) {
+      return errorResponse(res, "Teacher is not in the talent pool", 400);
+    }
+
+    // Create non-blocking notification (wrap in try/catch)
+    try {
+      const SchoolProfile = require("../models/SchoolProfile");
+      const school = await SchoolProfile.findOne({ userId: req.user.userId })
+        .select("schoolName")
+        .lean();
+      const schoolName = school ? school.schoolName : "A school";
+
+      await JobNotification.create({
+        userId: teacherProfile.userId,
+        jobId: jobId || null,
+        type: "system_alert",
+        title: "Invitation to Apply",
+        message:
+          message ||
+          `${schoolName} has invited you to apply for a position.`,
+        priority: "medium",
+        category: "job",
+        actionRequired: true,
+        actionUrl: jobId
+          ? `${process.env.FRONTEND_URL}/dashboard/teacher/jobs/${jobId}`
+          : `${process.env.FRONTEND_URL}/dashboard/teacher/jobs`,
+        actionText: jobId ? "View Job" : "Browse Jobs",
+      });
+    } catch (notificationError) {
+      console.log("Invite notification failed:", notificationError.message);
+    }
+
+    return successResponse(res, null, "Invitation sent successfully");
+  } catch (error) {
+    console.error("Invite to apply error:", error);
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * POST /shortlist
+ * School saves a teacher to their shortlist
+ */
+const saveTeacher = async (req, res) => {
+  try {
+    // Role check - only schools can save teachers
+    if (req.user.role !== "school") {
+      return errorResponse(res, "Only schools can save teachers", 403);
+    }
+
+    const { teacherProfileId, notes } = req.body;
+
+    if (!teacherProfileId) {
+      return errorResponse(res, "teacherProfileId is required", 400);
+    }
+
+    // Validate teacher profile exists
+    const teacherProfile = await TeacherProfile.findById(teacherProfileId)
+      .select("_id")
+      .lean();
+
+    if (!teacherProfile) {
+      return errorResponse(res, "Teacher profile not found", 404);
+    }
+
+    try {
+      const savedTeacher = await SavedTeacher.create({
+        schoolId: req.user.userId,
+        teacherProfileId,
+        notes: notes || "",
+      });
+
+      return createdResponse(
+        res,
+        { savedTeacher },
+        "Teacher saved to shortlist"
+      );
+    } catch (err) {
+      if (err.code === 11000) {
+        return errorResponse(res, "Teacher already saved", 400);
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error("Save teacher error:", error);
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * DELETE /shortlist/:teacherProfileId
+ * School removes a teacher from their shortlist
+ */
+const unsaveTeacher = async (req, res) => {
+  try {
+    // Role check - only schools can unsave teachers
+    if (req.user.role !== "school") {
+      return errorResponse(res, "Only schools can manage the shortlist", 403);
+    }
+
+    const { teacherProfileId } = req.params;
+
+    const result = await SavedTeacher.findOneAndDelete({
+      schoolId: req.user.userId,
+      teacherProfileId,
+    });
+
+    if (!result) {
+      return errorResponse(res, "Teacher not in shortlist", 404);
+    }
+
+    return successResponse(res, null, "Teacher removed from shortlist");
+  } catch (error) {
+    console.error("Unsave teacher error:", error);
+    return errorResponse(res, error.message, 500);
+  }
+};
+
+/**
+ * GET /shortlist
+ * Get school's saved/shortlisted teachers with sanitized professional data only
+ * GDPR: populate uses same professional-only fields as search endpoint
+ */
+const getSavedTeachers = async (req, res) => {
+  try {
+    // Role check - only schools can view shortlist
+    if (req.user.role !== "school") {
+      return errorResponse(res, "Only schools can view the shortlist", 403);
+    }
+
+    const savedTeachers = await SavedTeacher.find({ schoolId: req.user.userId })
+      .populate(
+        "teacherProfileId",
+        "firstName lastName subject qualification yearsOfTeachingExperience city country professionalBio availabilityStatus"
+      )
+      .sort({ savedAt: -1 })
+      .lean();
+
+    // Sanitize to match search result shape (plus notes and savedAt)
+    const sanitized = savedTeachers.map((s) => {
+      const t = s.teacherProfileId;
+      if (!t) {
+        return {
+          id: s._id,
+          teacher: null,
+          notes: s.notes,
+          savedAt: s.savedAt,
+        };
+      }
+      return {
+        id: s._id,
+        teacher: {
+          id: t._id,
+          name: `${t.firstName} ${t.lastName}`,
+          subject: t.subject,
+          qualification: t.qualification,
+          experience: t.yearsOfTeachingExperience,
+          location: `${t.city}, ${t.country}`,
+          bio: t.professionalBio,
+          availabilityStatus: t.availabilityStatus || "not_looking",
+        },
+        notes: s.notes,
+        savedAt: s.savedAt,
+      };
+    });
+
+    return successResponse(res, { savedTeachers: sanitized });
+  } catch (error) {
+    console.error("Get saved teachers error:", error);
+    return errorResponse(res, error.message, 500);
+  }
+};
+
 module.exports = {
   optIn,
   optOut,
   getConsentStatus,
   updateAvailability,
   searchTalentPool,
+  inviteToApply,
+  saveTeacher,
+  unsaveTeacher,
+  getSavedTeachers,
 };
