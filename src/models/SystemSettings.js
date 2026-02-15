@@ -37,7 +37,7 @@ const systemSettingsSchema = new mongoose.Schema(
     // Category for grouping settings
     category: {
       type: String,
-      enum: ["subscriptions", "features", "platform", "notifications", "security"],
+      enum: ["subscriptions", "features", "platform", "notifications", "security", "advertisements"],
       default: "platform",
     },
     // Whether this setting can be modified via admin UI
@@ -113,6 +113,15 @@ systemSettingsSchema.statics.isSubscriptionEnabled = async function () {
 };
 
 /**
+ * Check if the ad system is enabled globally
+ * @returns {Promise<boolean>} - true if the ad system is enabled
+ */
+systemSettingsSchema.statics.isAdSystemEnabled = async function () {
+  const value = await this.getValue("ads-enabled", true);
+  return Boolean(value);
+};
+
+/**
  * Toggle subscription enforcement
  * @param {boolean} enabled - Whether to enable subscriptions
  * @param {ObjectId} updatedBy - User ID who made the change
@@ -162,6 +171,13 @@ systemSettingsSchema.statics.initializeDefaults = async function () {
       valueType: "boolean",
       description: "Global toggle for subscription enforcement. When OFF, all features are free.",
       category: "subscriptions",
+    },
+    {
+      key: "ads-enabled",
+      value: true,
+      valueType: "boolean",
+      description: "Global toggle for the advertisement system. When OFF, ad features are hidden.",
+      category: "advertisements",
     },
   ];
 

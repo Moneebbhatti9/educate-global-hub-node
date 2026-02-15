@@ -40,6 +40,7 @@ const emailSubjects = {
   kycApproved: "KYC Approved - Welcome to Educate Global Hub!",
   kycRejected: "KYC Review Update - Action Required",
   kycResubmission: "KYC Resubmission Required - Educate Global Hub",
+  adFeedback: "Ad Request Update - Educate Global Hub",
 };
 
 // Send email function
@@ -174,6 +175,20 @@ const sendKYCResubmissionEmail = async (email, userName, reason) => {
   return await sendEmail(email, emailSubjects.kycResubmission, html);
 };
 
+// Send ad feedback email (reject/changes requested)
+const sendAdFeedbackEmail = async (email, userName, jobTitle, status, feedback) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const html = await getEmailTemplate("ad-feedback", {
+    userName,
+    jobTitle,
+    status,
+    feedback,
+    actionUrl: `${frontendUrl}/dashboard/school/my-advertisements`,
+  });
+
+  return await sendEmail(email, emailSubjects.adFeedback, html);
+};
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -187,4 +202,5 @@ module.exports = {
   sendKYCApprovedEmail,
   sendKYCRejectedEmail,
   sendKYCResubmissionEmail,
+  sendAdFeedbackEmail,
 };

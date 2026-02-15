@@ -135,6 +135,14 @@ const teacherProfileSchema = new mongoose.Schema(
 
     isProfileComplete: { type: Boolean, default: false },
     profileCompletion: { type: Number, default: 0 },
+
+    // ---- Talent Pool ----
+    talentPoolOptedIn: { type: Boolean, default: false },
+    availabilityStatus: {
+      type: String,
+      enum: ["available", "open_to_offers", "not_looking"],
+      default: "not_looking",
+    },
   },
   { timestamps: true }
 );
@@ -145,6 +153,7 @@ teacherProfileSchema.index({ country: 1 });
 teacherProfileSchema.index({ city: 1 });
 teacherProfileSchema.index({ subject: 1 });
 teacherProfileSchema.index({ qualification: 1 });
+teacherProfileSchema.index({ talentPoolOptedIn: 1, availabilityStatus: 1 });
 
 // Virtual populate for user data
 teacherProfileSchema.virtual("user", {

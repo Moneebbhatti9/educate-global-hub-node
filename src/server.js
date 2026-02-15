@@ -40,7 +40,12 @@ const adminSettingsRoutes = require("./routes/adminSettings");
 const dropdownRoutes = require("./routes/dropdowns");
 const subscriptionRoutes = require("./routes/subscriptions");
 const adminSubscriptionRoutes = require("./routes/adminSubscriptions");
+const adRoutes = require("./routes/ads");
+const talentPoolRoutes = require("./routes/talentPool");
+const healthRoutes = require("./routes/health");
 const { applyMiddlewares, applyErrorMiddlewares } = require("./middleware");
+const { startAdCron, stopAdCron } = require("./services/adCronService");
+const { startConsentRenewalCron, stopConsentRenewalCron } = require("./services/consentRenewalService");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -184,11 +189,20 @@ app.use(`/api/${apiVersion}/admin/settings`, adminSettingsRoutes);
 app.use(`/api/${apiVersion}/dropdowns`, dropdownRoutes);
 app.use(`/api/${apiVersion}/subscriptions`, subscriptionRoutes);
 app.use(`/api/${apiVersion}/admin/subscriptions`, adminSubscriptionRoutes);
+app.use(`/api/${apiVersion}/ads`, adRoutes);
+app.use(`/api/${apiVersion}/talent-pool`, talentPoolRoutes);
+app.use(`/api/${apiVersion}/admin/system`, healthRoutes);
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api/${apiVersion}`);
+
+  // Start ad expiration cron job
+  startAdCron();
+
+  // Start consent renewal cron job
+  startConsentRenewalCron();
 });
 
 const io = socketIo(server, {
@@ -244,6 +258,18 @@ io.on("connection", (socket) => {
     console.log(`👁️ User ${userId} viewed discussion ${discussionId}`);
   });
 
+  // Admin joins a dashboard room for real-time updates (e.g., financial)
+  socket.on("admin:join", (room) => {
+    socket.join(`admin:${room}`);
+    console.log(`📊 Socket ${socket.id} joined admin room: admin:${room}`);
+  });
+
+  // Admin leaves a dashboard room
+  socket.on("admin:leave", (room) => {
+    socket.leave(`admin:${room}`);
+    console.log(`📊 Socket ${socket.id} left admin room: admin:${room}`);
+  });
+
   socket.on("disconnect", () => {
     console.log(`❌ Client disconnected: ${socket.id}`);
   });
@@ -259,11 +285,15 @@ applyErrorMiddlewares(app);
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down gracefully");
+  stopAdCron();
+  stopConsentRenewalCron();
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
   console.log("SIGINT received, shutting down gracefully");
+  stopAdCron();
+  stopConsentRenewalCron();
   process.exit(0);
 });
 
