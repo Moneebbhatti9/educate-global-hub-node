@@ -52,7 +52,7 @@ async function handleStripeWebhook(req, res, next) {
     // Handle different event types
     switch (event.type) {
       case "checkout.session.completed":
-        await handleCheckoutSessionCompleted(event.data.object);
+        await handleCheckoutSessionCompleted(event.data.object, req);
         break;
 
       case "payment_intent.succeeded":
@@ -101,7 +101,7 @@ async function handleStripeWebhook(req, res, next) {
         break;
 
       case "invoice.payment_succeeded":
-        await handleInvoicePaymentSucceeded(event);
+        await handleInvoicePaymentSucceeded(event, req);
         break;
 
       default:
@@ -126,20 +126,20 @@ async function handleStripeWebhook(req, res, next) {
  * Handle successful checkout session completion
  * Routes to appropriate handler based on checkout mode (payment vs subscription)
  */
-async function handleCheckoutSessionCompleted(session) {
+async function handleCheckoutSessionCompleted(session, req) {
   console.log(`✅ Checkout session completed: ${session.id}`);
   console.log(`🔍 [DEBUG] Session mode: "${session.mode}", routing to ${session.mode === "subscription" ? "subscription" : "payment"} handler`);
 
   try {
     // Check if this is a subscription checkout
     if (session.mode === "subscription") {
-      await handleSubscriptionCheckoutCompleted(session);
+      await handleSubscriptionCheckoutCompleted(session, req);
       return;
     }
 
     // Check if this is an ad payment
     if (session.metadata?.type === "ad_payment") {
-      await handleAdPaymentCompleted(session);
+      await handleAdPaymentCompleted(session, req);
       return;
     }
 
@@ -259,6 +259,18 @@ async function handleCheckoutSessionCompleted(session) {
     await sellerTierDoc.save();
 
     console.log(`✅ Sale created for session ${session.id}: Sale ID ${sale._id}`);
+
+    // Emit revenue event for admin financial dashboard
+    const io = req && req.app ? req.app.get("io") : null;
+    if (io) {
+      io.to("admin:financial").emit("revenue:payment", {
+        type: "sale",
+        amount: royaltyCalc.platformCommission,
+        currency: "GBP",
+        description: `Resource sale: ${resource.title}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Generate invoice
     try {
@@ -674,7 +686,7 @@ async function handleExternalAccountCreated(externalAccount) {
  * Handle subscription checkout session completion
  * Creates UserSubscription record when user completes subscription checkout
  */
-async function handleSubscriptionCheckoutCompleted(session) {
+async function handleSubscriptionCheckoutCompleted(session, req) {
   console.log(`✅ Subscription checkout completed: ${session.id}`);
   console.log(`🔍 [DEBUG] Session mode: ${session.mode}, subscription: ${session.subscription}, customer: ${session.customer}`);
   console.log(`🔍 [DEBUG] Session metadata:`, JSON.stringify(session.metadata));
@@ -758,6 +770,18 @@ async function handleSubscriptionCheckoutCompleted(session) {
     });
 
     console.log(`✅ Subscription created: ${userSubscription._id} for user ${userId}`);
+
+    // Emit revenue event for admin financial dashboard
+    const io = req && req.app ? req.app.get("io") : null;
+    if (io) {
+      io.to("admin:financial").emit("revenue:payment", {
+        type: "subscription",
+        amount: session.amount_total || 0,
+        currency: "GBP",
+        description: `Subscription payment: ${planName || plan.name}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Send confirmation email
     try {
@@ -1130,7 +1154,7 @@ async function handleInvoicePaymentFailed(event) {
 /**
  * Handle invoice payment succeeded (for renewals)
  */
-async function handleInvoicePaymentSucceeded(event) {
+async function handleInvoicePaymentSucceeded(event, req) {
   const invoice = event.data.object;
 
   // Only handle subscription invoices (not one-time payments)
@@ -1196,6 +1220,18 @@ async function handleInvoicePaymentSucceeded(event) {
     await userSubscription.save();
     await WebhookEvent.markProcessed(event.id);
 
+    // Emit revenue event for admin financial dashboard (subscription renewal)
+    const io = req && req.app ? req.app.get("io") : null;
+    if (io) {
+      io.to("admin:financial").emit("revenue:payment", {
+        type: "subscription",
+        amount: invoice.amount_paid || 0,
+        currency: "GBP",
+        description: "Subscription renewal",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Notify user about successful renewal
     try {
       const user = await User.findById(userSubscription.userId);
@@ -1231,7 +1267,7 @@ async function handleInvoicePaymentSucceeded(event) {
  * Handle ad payment completed
  * Called when a checkout.session.completed event has type=ad_payment in metadata
  */
-async function handleAdPaymentCompleted(session) {
+async function handleAdPaymentCompleted(session, req) {
   console.log(`📢 Processing ad payment for session: ${session.id}`);
 
   try {
@@ -1278,6 +1314,18 @@ async function handleAdPaymentCompleted(session) {
     await adRequest.save();
 
     console.log(`✅ Ad request ${ad_request_id} activated successfully`);
+
+    // Emit revenue event for admin financial dashboard
+    const io = req && req.app ? req.app.get("io") : null;
+    if (io) {
+      io.to("admin:financial").emit("revenue:payment", {
+        type: "ad",
+        amount: session.amount_total || 0,
+        currency: "GBP",
+        description: `Ad payment: ${adRequest.jobId?.title || "Advertisement"}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Notify school - ad is now live
     await JobNotification.create({

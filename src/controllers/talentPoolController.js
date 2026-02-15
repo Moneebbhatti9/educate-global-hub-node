@@ -351,7 +351,7 @@ const inviteToApply = async (req, res) => {
         .lean();
       const schoolName = school ? school.schoolName : "A school";
 
-      await JobNotification.create({
+      const notification = await JobNotification.create({
         userId: teacherProfile.userId,
         jobId: jobId || null,
         type: "system_alert",
@@ -367,6 +367,15 @@ const inviteToApply = async (req, res) => {
           : `${process.env.FRONTEND_URL}/dashboard/teacher/jobs`,
         actionText: jobId ? "View Job" : "Browse Jobs",
       });
+
+      // Emit real-time notification via Socket.IO
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user:${teacherProfile.userId}`).emit(
+          "notification:new",
+          notification
+        );
+      }
     } catch (notificationError) {
       console.log("Invite notification failed:", notificationError.message);
     }
