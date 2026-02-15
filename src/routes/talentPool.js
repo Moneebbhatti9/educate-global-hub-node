@@ -6,6 +6,7 @@ const {
   optOut,
   getConsentStatus,
   updateAvailability,
+  searchTalentPool,
 } = require("../controllers/talentPoolController");
 
 // Consent management
@@ -15,5 +16,8 @@ router.get("/consent-status", authenticateToken, getConsentStatus);
 
 // Availability
 router.patch("/availability", authenticateToken, updateAvailability);
+
+// Search
+router.get("/search", authenticateToken, searchTalentPool);
 
 module.exports = router;
